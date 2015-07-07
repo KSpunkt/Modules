@@ -3,7 +3,7 @@
 Created on Fri May 29 13:16:37 2015
 
 @author: Kaddabadda
-reads daily precipitation sums from N-Tagessummenfiles from AHYD into one dataframe
+Reads daily precipitation sums from N-Tagessummenfiles from AHYD into one dataframe
 """
 import pandas as pd
 import numpy as np
@@ -88,19 +88,6 @@ for eachElement in statlist_AHYD:
 
 df_ahyd_all.to_pickle(src + '\AHYD_dailysums.npy')
 
-
-
-## Stuff I tried to automatize detection of "Lücke/L?cke" in data files
-##ha[eachStatNr].replace(regex=True,inplace=True,to_replace=r'[Lü?cke]+',value=r'')
-##ha['1999']
-##ha.replace('Lücke', '-9999')
-##ha[eachStatNr] = ha.values.apply(lambda x: x.replace(",",".")).astype(float)
-##
-### gives the date where the missing value is identified
-##fail_date = ha[ha[eachStatNr].str.contains("cke")]
-##
-##selector = ha[eachStatNr].str.contains("cke")==True
-##ha[selector] == -999
 
 
 

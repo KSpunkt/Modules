@@ -7,14 +7,7 @@ Created on Sun Feb 22 11:41:43 2015
 # FIGURE 99th percentile events, each station
 # ------------------------------
 
-import matplotlib as mpl
-
 import numpy as np
-import pandas as pd
-import csv
-import os
-import numpy.ma as ma
-#import xray as xr
 import matplotlib.pyplot as plt
 import Modules.ZAMG_tawes.stationfiles_v9 as zamg
 import matplotlib.dates as dates
