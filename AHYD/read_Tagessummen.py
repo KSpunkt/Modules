@@ -45,6 +45,8 @@ for eachStatNr in statlist_AHYD:
             selector = ha<0
             ha[selector] = None
 
+            ha.index.min            
+            
             emptylist.append(ha)
             print '---------------------'
             print 'Read file sucessfully!'
@@ -90,6 +92,7 @@ df_ahyd_all.to_pickle(src + '\AHYD_dailysums.npy')
 # -----------------------------------
 # ----------------- Repair dataframe (edited 2015-07-10)
 # -----------------------------------
+
 df_ahyd_all = pd.read_pickle(src + '\AHYD_dailysums.npy')
 
 # there are some erroneous data points, where one day has more than one 
@@ -114,35 +117,26 @@ possible_errors_hour = np.where(df_ahyd_all.index.hour!=7)[0]
 ind_err = np.unique(np.concatenate((possible_errors_hour,
                                        possible_errors_min,
                                        possible_errors_sec), axis=0))                               
-strange_dates = df_ahyd_all.index[ind_err]   
+strange_dates = df_ahyd_all.index[ind_err] 
 
-dates_list = []
-for ID in range(len(strange_dates)):
-    entry = df_ahyd_all[str(strange_dates[ID])[0:10]]
-    dates_list.append(entry)
-        
-all_dates_errors = pd.concat(dates_list, axis=0, join='outer')   
-
-
+# Dataframe with all weird times in it:
 dates_list = []
 for ID in range(len(strange_dates)):
     entry = df_ahyd_all[str(strange_dates[ID])]
-    dates_list.append(entry)
-        
+    dates_list.append(entry)    
 all_dates_errors = pd.concat(dates_list, axis=0, join='outer') 
 
-                                  
-greater100 = all_dates_errors[all_dates_errors>0]
-all_dates_errors = all_dates_errors.dropna(how='all')
+# drop rows where all values are NAN                                  
+all_dates_errors_not_NAN = all_dates_errors.dropna(how='all')
 
 # gives for each date the station that had the highest value for the day
-all_dates_errors.idxmax(axis=1).dropna(how='all')
+all_dates_errors_not_NAN.idxmax(axis=1).dropna(how='all')
 
 # for each station the date where the station had its max
-all_dates_errors.idxmax(axis=0).dropna(how='all')
+all_dates_errors_not_NAN.idxmax(axis=0).dropna(how='all')
 
-
-
+# replace the 07:00:00 values with the 07:30:00
+df_ahyd_all.ix['1998-05-01 07:00:00', '112730'] = np.float(df_ahyd_all['112730']['1998-05-01 07:30:00'])
 
 
 
