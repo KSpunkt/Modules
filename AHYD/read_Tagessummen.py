@@ -87,6 +87,62 @@ for eachElement in statlist_AHYD:
         fail_stations.append(eachElement)
 
 df_ahyd_all.to_pickle(src + '\AHYD_dailysums.npy')
+# -----------------------------------
+# ----------------- Repair dataframe (edited 2015-07-10)
+# -----------------------------------
+df_ahyd_all = pd.read_pickle(src + '\AHYD_dailysums.npy')
+
+# there are some erroneous data points, where one day has more than one 
+# observation
+
+# first and last day of observations in file
+start = df_ahyd_all.index[0]
+end = df_ahyd_all.index[-1]
+
+# span daily range between first and last day
+correct_daily_range = pd.date_range(start, end, freq='1D')
+
+# find number of errors (=additional days)
+errors = len(df_ahyd_all.index) - len(correct_daily_range)
+
+# find strange datetime indices (should be 07:00:00 for all)
+possible_errors_sec = np.where(df_ahyd_all.index.second!=0)[0]
+possible_errors_min = np.where(df_ahyd_all.index.minute!=0)[0]
+possible_errors_hour = np.where(df_ahyd_all.index.hour!=7)[0]
+
+# indices of strange dates
+ind_err = np.unique(np.concatenate((possible_errors_hour,
+                                       possible_errors_min,
+                                       possible_errors_sec), axis=0))                               
+strange_dates = df_ahyd_all.index[ind_err]   
+
+dates_list = []
+for ID in range(len(strange_dates)):
+    entry = df_ahyd_all[str(strange_dates[ID])[0:10]]
+    dates_list.append(entry)
+        
+all_dates_errors = pd.concat(dates_list, axis=0, join='outer')   
+
+
+dates_list = []
+for ID in range(len(strange_dates)):
+    entry = df_ahyd_all[str(strange_dates[ID])]
+    dates_list.append(entry)
+        
+all_dates_errors = pd.concat(dates_list, axis=0, join='outer') 
+
+                                  
+greater100 = all_dates_errors[all_dates_errors>0]
+all_dates_errors = all_dates_errors.dropna(how='all')
+
+# gives for each date the station that had the highest value for the day
+all_dates_errors.idxmax(axis=1).dropna(how='all')
+
+# for each station the date where the station had its max
+all_dates_errors.idxmax(axis=0).dropna(how='all')
+
+
+
 
 
 

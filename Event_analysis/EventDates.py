@@ -17,13 +17,22 @@ def get_percentiles(dataframe):
     ''' calculate percentiles all data in frame (all stations, all times)
     *** output: [p95, p98, p99, p99.9]
     *** !!! ignores zeros !!!
+    *** and number of occurrences over percentile
     '''
     tet = dataframe.values
     tet[tet==0] = np.nan
     test = tet[pd.notnull(tet)]
-    print len(test)
-    percentiles_p3d = np.percentile(test, q=[95, 98, 99, 99.9])
-    return percentiles_p3d
+    print 'Observations > 0: ', len(test)
+    p3d = np.percentile(test, q=[95, 98, 99, 99.9])
+    nr = []
+    for value in p3d:    
+        select = test > value
+        nr.append(len(test[select]))
+    percentiles_dict = {'p95':{'value': p3d[0], 'nr': nr[0]}, 'p98':{'value':
+                         p3d[1], 'nr': nr[1]}, 'p99':{'value':p3d[2], 'nr':
+                         nr[2]}, 'p99.9':{'value':p3d[3], 'nr':nr[3]}}
+    print 'percentiles and number of observaitons above: \n', percentiles_dict
+    return percentiles_dict
 
 
 ### function to read dates to csv file

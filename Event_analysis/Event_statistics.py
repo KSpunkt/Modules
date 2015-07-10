@@ -19,18 +19,21 @@ plotpath = r'I:\DOCUMENTS\WEGC\02_PhD_research\04_Programming\Python\plots\Data_
 ZAMG_all_stations = pd.read_pickle(pth2 + '\ZAMG_10min.npy')
 AHYD_all_stations = pd.read_pickle(src + '\AHYD_dailysums.npy')
 
+# make Events class and join with Event Statistics?
 
-
-
-def describe_dataset(dataframe, res):
+def describe_dataset(dataframe, res, *months):
     ''' calculate basic statistics on 
     *** years, days, stations in record
     *** counts of NAN, Zero, drizzle, DWD intensity categories
     INPUT:
     *** pandas dataframe
     *** temporal resolution of df (thresholds depend on time steps)
+    OUTPUT:
+    *** table of statistics and numbers of dataframe
     '''
     df = dataframe
+    df_statistics = df.describe()
+    
     # use if only subset of months is considered
     #    month = df.index.month
     #    selector = ((4 <= month) & (month <= 10))
@@ -38,15 +41,63 @@ def describe_dataset(dataframe, res):
     # 
     max_rec_len_years = df.index.year[-1]-df.index.year[0]+1
     total_rec = df.size
-
-    # use thresholds depending on temporal resolution  
-    thresholds = {'10min' : [0.1, 0.5, 1.7, 8.3, 17], '1h': [], '1d' : [], '3d'
-                  : []}    
     
+    # percentile values of dataframe
+    perc_dict = ev.get_percentiles(df)
+
+    # Thresholds selectors: boolean matrices returning selection              
+    Ts = {'fixed': {'10min' : {'drizzle': df==.1,
+                               'light': (df>.1) & (df<.5),
+                               'moderate': (df>= .5) & (df<1.7),
+                               'heavy': (df>=1.7) & (df<8.3),
+                               'very heavy': df>=8.3,
+                               'torrential': df>17},
+                    '1h': {'drizzle': (df>.1) & (df<.5),
+                               'light': (df>=.5) & (df<2.5),
+                               'moderate:': (df>=2.5) & (df<10),
+                               'heavy': df>=10,
+                               'very heavy': df>=50},
+                    '1d' : {'Schimpf': df>=35,
+                            'Wussow': df>=84.9, 
+                    '3d' : df>=177}},
+         'percentile': {'p99' : df>perc_dict['p99']['value'],
+                        'p99.9' : df>perc_dict['p99.9']['value']},
+         'stats': {'zeros': df==0,
+                   'NaN': pd.isnull(df)}}
+    
+    # count the instances fulfilling each selection criterion
+    for key in Ts.keys():      
+        for subkey in Ts[key].keys():                       
+            if key == 'fixed':                
+                for subsubkey in Ts[key][subkey].keys():
+                    nr = df[Ts[key][subkey][subsubkey]].count(0).sum()
+                    print key, subkey, subsubkey, ':  ', nr 
+            else:
+                nr = df[Ts[key][subkey]].count(0).sum()
+                print key, subkey, ':  ', nr 
+            
+            
+    
+    
+    
+    
+                             
+    
+    
+    total = df[Threshold_Selectors[key1][key2][key3]].count(0).sum()
+
+    total_incl_zero = df.count(0).sum()
+    total_excl_zero = df[df>0].count(0).sum()
+    total_zero = df[df==0].count(0).sum()    
+    
+   
+    
+    days = selected.resample('D', how='sum', closed='left', label='left').dropna()    
+    nr_days_in_selection = np.size(days)
+    # percentage of observations fulfilling selection
+    percent_selection = np.round(np.float(np.size(selected))/np.float(np.size(df))*100, 2)   
     
     for i in thresholds.values[res]:
-        selector = df > i
-        selected = df[selector]
         
         occurrence_days = selected.resample('D', how='sum', closed='left',
                                             label='left').dropna()
@@ -55,31 +106,6 @@ def describe_dataset(dataframe, res):
         percent_selected = np.round(np.float(np.size(selected))/
                                     np.float(np.size(df))*100, 2)
         
-        
-   # records greater 0.1mm
-    mm_selector = df > 0.1
-    wet = df[mm_selector]
-    days_with_P = wet.resample('D', how='sum', closed='left', label='left').dropna()
-    nr_days_with_P = np.size(days_with_P)
-    # percent of total days to 'wet' days
-    perc_wet_days = np.round(np.float(nr_days_with_P)/np.float(np.size(df.resample('D')))*100, 2)
-    # percentage of wet records
-    perc_wet = np.round(np.float(np.size(wet))/np.float(np.size(df))*100, 2)
-
-    zero_selector = data==0
-    positive_precip = data[zero_selector]
-    # percentage of zero
-    perc_zero = np.round(np.float(np.size(positive_precip))/np.float(np.size(data))*100, 2)
-
-    nan_selector = pd.isnull(data)
-    nan_precip = data[nan_selector]
-    # percentage of nan
-    perc_nan = np.round(np.float(np.size(nan_precip))/np.float(np.size(data))*100, 2)
-
-    drizzle_selector = (data < 0.2) & (data > 0)
-    drizzle_precip = data[drizzle_selector]
-    # percentage of drizzle < 0.19mm/10min
-    perc_drizzle = np.round(np.float(np.size(drizzle_precip))/np.float(np.size(data))*100, 2)
 
     print 'Total record size: ', total_rec, ' instances \n'
     print 'Percent NaN: ', , '%\n'
