@@ -28,9 +28,8 @@ src = r'I:\DOCUMENTS\WEGC\02_PhD_research\03_Data\AHYD'
 plotpath = r'I:\DOCUMENTS\WEGC\02_PhD_research\04_Programming\Python\plots\precip_heatmaps'
 
 
-AHYD_all_stations = pd.read_pickle(src + '\AHYD_allstations_summer.npy')
+AHYD_all_stations = pd.read_pickle(src + '\AHYD_dailysums.npy')
 ZAMG_all_stations = pd.read_pickle(pth2 + '\ZAMG_10min_allyear.npy')
-
 
 percentiles_ZAMG_YR = smp.percentiles_totsample(ZAMG_all_stations)
 
