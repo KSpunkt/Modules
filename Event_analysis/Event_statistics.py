@@ -21,19 +21,23 @@ class StationDataFrame:
     
     '''  
     
-    def __init__(self, dataframe, resolution=0, season=[1, 12]):
+    def __init__(self, dataframe, resolution='10min', season=[1, 12],
+                 resampling=False):
         ''' class instance stationfiles (n=len(statnrs)*len(yrs))
         --------------------
         Class  attributes:
         --------------------
         dataframe: pd.DataFrame with DateTime Index
-        resolution: resample temporal resolution
-                    default: no resampling (0)
+        resolution: temporal resolution of dataframe (frequency of pd.dataFrame)
+                    default: '10min'
+        resampling: resample Dataframe to other temporal resolution
+                    default: False
                     options: '10min', '60Min', '1H', '24H' '1D', '3D'
         season: first and last month to be included in the DataFrame
         '''
         
-        self.resolution = resolution 
+        self.resolution = resolution
+        self.resampling = resampling
         self.season = season 
         
         self.path1 = r'I:\DOCUMENTS\WEGC\02_PhD_research\04_Programming\Python\Data_Analysis'
@@ -45,58 +49,40 @@ class StationDataFrame:
         selector = ((season[0] <= month) & (month <= season[1]))
         self.dataframe = dataframe[selector] 
                
-        if resolution == 0:
+        if resampling == False:
             print 'no resampling'
-            pass
         else:
-            print 'resampling dataframe to ', self.resolution
-            self.dataframe = self.dataframe.resample(self.resolution, how='sum',
+            print 'resampling dataframe to ', self.resampling
+            self.dataframe = self.dataframe.resample(self.resampling, how='sum',
                                                closed='left', label='left',
                                                base=0).dropna(axis=0,
                                                               how='all')
-    
-
-    
+                                                        
         # Thresholds selectors: boolean matrices returning selection              
-        self.thres_sel = {'fixed': {'5min' : {'heavy Wussow': self.dataframe>=5,
-                                              'heavy Schimpf': self.dataframe>=7.5,
-                                              'heavy DWD': self.dataframe>=5},
-                                    '10min' : {'drizzle': self.dataframe==.1,
-                                               'light': (self.dataframe>.1) &
-                                                   (self.dataframe<.5),
-                                               'moderate': (self.dataframe>= .5) &
-                                                      (self.dataframe<1.7),
-                                               'heavy': (self.dataframe>=1.7) &
-                                                   (self.dataframe<8.3),
-                                               'very heavy': self.dataframe>=8.3,
-                                               'torrential': self.dataframe>17},
-                                    '1H': {'drizzle': (self.dataframe>.1) &
-                                                 (self.dataframe<.5),
-                                           'light': (self.dataframe>=.5) &
-                                               (self.dataframe<2.5),
-                                            'moderate:': (self.dataframe>=2.5) &
-                                                    (self.dataframe<10),
-                                            'heavy': self.dataframe>=10,
-                                            'very heavy': self.dataframe>=50},
-                                    '1D' : {'Schimpf': self.dataframe>=35,
-                                            'Wussow': self.dataframe>=84.9},
-                                    '3D' : {'Carinthian': self.dataframe>=177},
-                         'percentile': {'p99' : [self.get_percentiles()['p99']
-                                               ['value']],
-                                        'p99.9' : [self.get_percentiles()['p99']
-                                                 ['value']]},
-                         'stats': {'zeros': self.dataframe==0,
-                                   'NaN': pd.isnull(self.dataframe)}}    
-    
-    
-    
-    def properties(self):
-        if self.resolution == 0:
-            print 'Temporal resolution: original dataframe \n'
-        else:
-            print 'Temporal resolution: ', self.resolution, '(resampled)\n'
-        print 'Season (months): ', self.season[0], ' to ', self.season[1] 
-    
+        self.thres_sel = {'5min' : {'heavy Wussow': self.dataframe>=5,
+                                    'heavy Schimpf': self.dataframe>=7.5,
+                                    'heavy DWD': self.dataframe>=5},
+                          '10min' : {'drizzle': self.dataframe==.1,
+                                     'light': (self.dataframe>.1) &
+                                     (self.dataframe<.5),
+                                     'moderate': (self.dataframe>= .5) &
+                                     (self.dataframe<1.7),
+                                     'heavy': (self.dataframe>=1.7) &
+                                     (self.dataframe<8.3),
+                                     'very heavy': self.dataframe>=8.3,
+                                     'torrential': self.dataframe>17},
+                          '1H': {'drizzle': (self.dataframe>.1) &
+                                 (self.dataframe<.5),
+                                 'light': (self.dataframe>=.5) &
+                                 (self.dataframe<2.5),
+                                 'moderate:': (self.dataframe>=2.5) &
+                                 (self.dataframe<10),
+                                 'heavy': self.dataframe>=10,
+                                 'very heavy': self.dataframe>=50},
+                          '1D' : {'Schimpf': self.dataframe>=35,
+                                  'Wussow': self.dataframe>=84.9},
+                          '3D' : {'Carinthian': self.dataframe>=177}}
+      
     def get_percentiles(self):
         ''' calculate percentiles all data in frame (all stations, all times)
         *** output: [p95, p98, p99, p99.9]
@@ -204,27 +190,7 @@ class StationDataFrame:
                                                       0, index_label='synnr')
         print 'Saving daily and hourly sums of event to csv; '
         print 'formatted to be joined with station shape file in GIS'
-        
-        # return day_tot_all, hours_day_all   
-
-    def intensity_occurrences(self, resolution):
-        ''' returns the numbers of occurrences of events over thresholds
-        INPUT:
-        *** resolution '5min, '10min', '1D', '
-        '''
-        
-        # count the instances fulfilling each selection criterion
-        for key in self.thres_sel.keys():      
-            for subkey in self.thres_sel[key].keys():                       
-                if key == 'fixed':                    
-                    for subsubkey in self.thres_sel[key][resolution].keys():
-                        nr = self.dataframe[self.thres_sel[key][subkey][subsubkey]].count(0).sum()
-                        print key, resolution, subsubkey, ':  ', nr 
-                else:
-                    nr = self.dataframe[self.thres_sel[key][subkey]].count(0).sum()
-                    print key, subkey, ':  ', nr 
-    
-    
+ 
     def describe_dataset(self, outfile):
         ''' calculate basic statistics on 
         *** years, days, stations in record
@@ -235,13 +201,12 @@ class StationDataFrame:
         OUTPUT:
         *** table of statistics and numbers of dataframe
         '''
-        
+       
         df = self.dataframe
         df_statistics = df.describe(percentiles=[.5, .9, .999])
         
         ncols = len(self.dataframe.columns)
-        print 'Number of stations: ', ncols        
-                
+        
         records = []
         for eachCol in self.dataframe.columns:
             series = self.dataframe[eachCol].dropna()
@@ -254,39 +219,45 @@ class StationDataFrame:
                  'mean': [records.mean()],
                  'median':[np.median(records)],
                  'cumulative':[records.sum()]}
-              
+                  
+        occurrences = {'>p99' : df[df > self.get_percentiles()['p99']['value']].count(0).sum(),
+                       '>p99.9' : df[df > self.get_percentiles()['p99.9']['value']].count(0).sum(),
+                       '>0': df[df>0].count(0).sum(),
+                       '0' : df[df==0].count(0).sum()}
+        # count the instances fulfilling each selection criterion
+        if self.resampling == False:
+            key = self.resolution
+        else:
+            key = self.resampling
+            
+        occ_over_thres = {}    
+        for subkey in self.thres_sel[key].keys():                       
+                nr = df[self.thres_sel[key][subkey]].count(0).sum()
+                occ_over_thres[(str(key)+ ' ' + str(subkey))] = nr
+                
+        # write results to file
+        with open(self.path3 + outfile + '_describe_dataset.txt', 'wb') as f:
+            f.write('DATAFRAME DESCRIPTION \n\n')
+            f.write('''Number of stations: {}\n Temporal resolution: {}\n
+                     Resampled to: {}\n Season (months, inclusive): {} to {}\n\n
+                     '''.format(ncols, self.resolution, self.resampling,
+                                self.season[0], self.season[1]))           
+            f.write('''Lengths of Series \n\n {} \n\n'''.format(years))
+            f.write('''Occurrences \n {} \n\n'''.format(occurrences))            
+            f.write('''Occurrences over fixed threshold values \n {} \n\n'''.format(occ_over_thres))
+        
 
+                 
                 
                 
+  
         
         
+        '''
         
-        
-                                 
-        
-'''        
-        total = df[Threshold_Selectors[key1][key2][key3]].count(0).sum()
-    
-        total_incl_zero = df.count(0).sum()
-        total_excl_zero = df[df>0].count(0).sum()
-        total_zero = df[df==0].count(0).sum()    
-        
-       
-        
-        days = selected.resample('D', how='sum', closed='left', label='left').dropna()    
-        nr_days_in_selection = np.size(days)
-        # percentage of observations fulfilling selection
         percent_selection = np.round(np.float(np.size(selected))/np.float(np.size(df))*100, 2)   
         
-        for i in thresholds.values[res]:
-            
-            occurrence_days = selected.resample('D', how='sum', closed='left',
-                                                label='left').dropna()
-            nr_days_with_P = np.size(occurrence_days)
-            
-            percent_selected = np.round(np.float(np.size(selected))/
-                                        np.float(np.size(df))*100, 2)
-            
+           
     
         print 'Total record size: ', total_rec, ' instances \n'
         print 'Percent NaN: ', , '%\n'
