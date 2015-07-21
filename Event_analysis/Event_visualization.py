@@ -21,7 +21,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import Modules.Event_analysis.plotting.intensity_matrix_colorbar as im
-import Modules.ZAMG_tawes.EventDates as smp
+import Modules.ZAMG_tawes.plotting.colors
 
 pth2 = 'I:\DOCUMENTS\WEGC\\02_PhD_research\\03_Data\ZAMG\processed_data\Station_Dataframes'
 src = r'I:\DOCUMENTS\WEGC\02_PhD_research\03_Data\AHYD'

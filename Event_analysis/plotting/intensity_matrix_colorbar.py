@@ -33,7 +33,7 @@ def event_matrix(event, orientation, filename):
     '''
     draw an intensity matrix for an
     *** event [pandas dataframe]
-    plot where stations are either sortet by latitide (N-S):
+    plot where stations are either sorted by latitide (N-S):
     orientation: 1
     or longitude (W-E):
     orientation: 2

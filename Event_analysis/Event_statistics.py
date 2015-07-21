@@ -59,29 +59,66 @@ class StationDataFrame:
                                                               how='all')
                                                         
         # Thresholds selectors: boolean matrices returning selection              
-        self.thres_sel = {'5min' : {'heavy Wussow': self.dataframe>=5,
-                                    'heavy Schimpf': self.dataframe>=7.5,
-                                    'heavy DWD': self.dataframe>=5},
-                          '10min' : {'drizzle': self.dataframe==.1,
-                                     'light': (self.dataframe>.1) &
+        self.thres_sel = {'5min' : {'heavy Wussow (>=5)': self.dataframe>=5,
+                                    'heavy Schimpf (>= 7.5)': self.dataframe>=7.5,
+                                    'heavy DWD (>=5)': self.dataframe>=5},
+                          '10min' : {'drizzle (==.1)': self.dataframe==.1,
+                                     'light (>.1 & <.5)': (self.dataframe>.1) &
                                      (self.dataframe<.5),
-                                     'moderate': (self.dataframe>= .5) &
+                                     'moderate (>.5 & < 1.7)': (self.dataframe>= .5) &
                                      (self.dataframe<1.7),
-                                     'heavy': (self.dataframe>=1.7) &
+                                     'heavy (>=1.7 & < 8.3)': (self.dataframe>=1.7) &
                                      (self.dataframe<8.3),
-                                     'very heavy': self.dataframe>=8.3,
-                                     'torrential': self.dataframe>17},
-                          '1H': {'drizzle': (self.dataframe>.1) &
+                                     'very heavy (>= 8.3)': self.dataframe>=8.3,
+                                     'torrential (>17)': self.dataframe>17},
+                          '1H': {'drizzle (>.1 & <.5)': (self.dataframe>.1) &
                                  (self.dataframe<.5),
-                                 'light': (self.dataframe>=.5) &
+                                 'light (>= .5 & < 2.5)': (self.dataframe>=.5) &
                                  (self.dataframe<2.5),
-                                 'moderate:': (self.dataframe>=2.5) &
+                                 'moderate (>=5 & <10):': (self.dataframe>=2.5) &
                                  (self.dataframe<10),
-                                 'heavy': self.dataframe>=10,
-                                 'very heavy': self.dataframe>=50},
-                          '1D' : {'Schimpf': self.dataframe>=35,
-                                  'Wussow': self.dataframe>=84.9},
-                          '3D' : {'Carinthian': self.dataframe>=177}}
+                                 'heavy (>=10)': self.dataframe>=10,
+                                 'very heavy (>=50)': self.dataframe>=50},
+                          '1D' : {'Schimpf (35)': self.dataframe>=35,
+                                  'Wussow (84.9)': self.dataframe>=84.9},
+                          '3D' : {'Carinthian (>=177)': self.dataframe>=177}}
+             
+        #df_statistics = self.dataframe.describe(percentiles=[.5, .9, .999])
+             
+        # Number of stations in dataset:
+        self.nr_stations = len(self.dataframe.columns)
+        
+        # numbers on the lengths of the series of the stations
+        records = []
+        for eachCol in self.dataframe.columns:
+            series = self.dataframe[eachCol].dropna()
+            rec_len = len(range(series.index.year[0], series.index.year[-1]+1))
+            records.append(rec_len)
+        records = np.hstack(records)
+        
+        self.years = {'longest':[records.max()], 
+                 'shortest':[records.min()],
+                 'mean': [records.mean()],
+                 'median':[np.median(records)],
+                 'cumulative':[records.sum()]}
+                 
+        # numbers of records exceeding p99 and p99.9          
+        self.occurrences = {'>p99' : self.dataframe[self.dataframe > self.get_percentiles()['p99']['value']].count(0).sum(),
+                       '>p99.9' : self.dataframe[self.dataframe > self.get_percentiles()['p99.9']['value']].count(0).sum(),
+                       '>0': self.dataframe[self.dataframe>0].count(0).sum(),
+                       '0' : self.dataframe[self.dataframe==0].count(0).sum()}
+        
+        # count the instances fulfilling each selection criterion
+        if self.resampling == False:
+            key = self.resolution
+        else:
+            key = self.resampling
+            
+        occ_over_thres = {}    
+        for subkey in self.thres_sel[key].keys():                       
+                nr = self.dataframe[self.thres_sel[key][subkey]].count(0).sum()
+                occ_over_thres[(str(key)+ ' ' + str(subkey))] = nr
+        self.occ_over_thres = occ_over_thres        
       
     def get_percentiles(self):
         ''' calculate percentiles all data in frame (all stations, all times)
@@ -104,6 +141,34 @@ class StationDataFrame:
         print 'percentiles and number of observaitons above: \n', percentiles_dict
         return percentiles_dict
         
+    def desription_tofile(self, outfile):
+        ''' calculate basic statistics on 
+        *** years, days, stations in record
+        *** counts of NAN, Zero, drizzle, DWD intensity categories
+        INPUT:
+        *** filename (use datasource, res, season)
+        OUTPUT:
+        *** txt file with basic numbers and sttaistics
+        '''
+   
+        # write results to file
+        with open(self.path3 + '/' + outfile + '_describe_dataset.txt', 'w') as f:
+            f.write('DATAFRAME DESCRIPTION \nfilename: {}\n\n'.format(outfile))
+            f.write('''Number of stations: {}\nTemporal resolution: {}\nResampled to: {}\nSeason (months, inclusive): {} to {}\n\n'''.format(self.nr_stations, self.resolution, self.resampling,
+            self.season[0], self.season[1]))           
+            f.write('''Lengths of Series [years]: \n''')
+            [f.write('''{}: {} \n'''.format(key, np.round(value,2))) for key, value in self.years.items()]
+            f.write('''\nOccurrences: \n''')
+            [f.write('''{}: {} \n'''.format(key, value)) for key, value in self.occurrences.items()]
+            f.write('''\n Occurrences over fixed threshold values: \n''')           
+            [f.write('''{}: {} \n'''.format(key, value)) for key, value in self.occ_over_thres.items()]
+            f.write('''\n\n''')
+            f.write('''Percentile values and number of occurrences (of all observations in DataFrame > 0):\n''')
+            for key, value in self.get_percentiles().items():
+                f.write('''{}: \n'''.format(key))
+                for key1, value1 in value.items():
+                    [f.write('''{}: {}\n'''.format(key1, np.round(value1,2)))]
+        
     def events_over_threshold(self, threshold, outfile):
         ''' Save dates of extreme events exceeding a defined threshold.
         
@@ -122,7 +187,7 @@ class StationDataFrame:
         '''
 
         csvname = outfile + '.csv'
-       
+        figname = outfile + '.png'
         print 'get events over threshold ...'
         dataframe_select = self.dataframe[self.dataframe > threshold].dropna(axis=0,
                                                                            how=
@@ -190,115 +255,93 @@ class StationDataFrame:
                                                       0, index_label='synnr')
         print 'Saving daily and hourly sums of event to csv; '
         print 'formatted to be joined with station shape file in GIS'
- 
-    def describe_dataset(self, outfile):
-        ''' calculate basic statistics on 
-        *** years, days, stations in record
-        *** counts of NAN, Zero, drizzle, DWD intensity categories
-        INPUT:
-        *** pandas dataframe
-        *** temporal resolution of df (thresholds depend on time steps)
-        OUTPUT:
-        *** table of statistics and numbers of dataframe
-        '''
-       
-        df = self.dataframe
-        df_statistics = df.describe(percentiles=[.5, .9, .999])
         
-        ncols = len(self.dataframe.columns)
+        ''' Show peak times of maximum intensities
+        temporal distributions of extremes of categories (min, h, d, 3d)
+        over time (year, month, day, hour of the day)
+        '''             
         
-        records = []
-        for eachCol in self.dataframe.columns:
-            series = self.dataframe[eachCol].dropna()
-            rec_len = len(range(series.index.year[0], series.index.year[-1]+1))
-            records.append(rec_len)
-        records = np.hstack(records)
-        
-        years = {'longest':[records.max()], 
-                 'shortest':[records.min()],
-                 'mean': [records.mean()],
-                 'median':[np.median(records)],
-                 'cumulative':[records.sum()]}
-                  
-        occurrences = {'>p99' : df[df > self.get_percentiles()['p99']['value']].count(0).sum(),
-                       '>p99.9' : df[df > self.get_percentiles()['p99.9']['value']].count(0).sum(),
-                       '>0': df[df>0].count(0).sum(),
-                       '0' : df[df==0].count(0).sum()}
-        # count the instances fulfilling each selection criterion
-        if self.resampling == False:
-            key = self.resolution
-        else:
-            key = self.resampling
-            
-        occ_over_thres = {}    
-        for subkey in self.thres_sel[key].keys():                       
-                nr = df[self.thres_sel[key][subkey]].count(0).sum()
-                occ_over_thres[(str(key)+ ' ' + str(subkey))] = nr
-                
-        # write results to file
-        with open(self.path3 + outfile + '_describe_dataset.txt', 'wb') as f:
-            f.write('DATAFRAME DESCRIPTION \n\n')
-            f.write('''Number of stations: {}\n Temporal resolution: {}\n
-                     Resampled to: {}\n Season (months, inclusive): {} to {}\n\n
-                     '''.format(ncols, self.resolution, self.resampling,
-                                self.season[0], self.season[1]))           
-            f.write('''Lengths of Series \n\n {} \n\n'''.format(years))
-            f.write('''Occurrences \n {} \n\n'''.format(occurrences))            
-            f.write('''Occurrences over fixed threshold values \n {} \n\n'''.format(occ_over_thres))
+        dates = pd.DataFrame({'year':dataframe_select.index.year,
+                              'month':dataframe_select.index.month,
+                              'day':dataframe_select.index.day,
+                              'hour':dataframe_select.index.hour,
+                              'minute':dataframe_select.index.minute})
         
 
-                 
-                
-                
-  
+        # figure peak intensity times
+        
+        fig, [ax, ax1, ax0] = plt.subplots(3,  figsize=(6, 6))
+        
+        #fig.set_facecolor('#d3d3d3')
+        
+        ax0 = plt.subplot(211)
+        dates.year.value_counts().sort_index().plot(kind='bar',
+                                                    color='#ba55d3',
+                                                    grid=False,
+                                                    fontsize=7,
+                                                    rot=45)
+        ax0.set(xlabel='year') 
+        
+        ax1 = plt.subplot(223)
+        dates.month.value_counts().sort_index().plot(kind='bar',
+                                                     color='#da70d6',
+                                                     grid=False,
+                                                     fontsize=9,
+                                                     rot=0)
+        
+        ticks = ['J', 'F', 'M',  'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D']
+        xlabels = ticks[self.season[0]-1: self.season[1]]
+        ax1.set(xticklabels=xlabels, xlabel='month')
+        
+        
+        ax2 = plt.subplot(224)
+        dates.hour.value_counts().sort_index().plot(kind='bar',
+                                                    color='#dda0dd',
+                                                    grid=False,
+                                                    fontsize=7,
+                                                    rot=45)
+        ax2.set(xlabel='hour')
+          
+        
+        fig.suptitle("Records over " + str(threshold) + 'mm, season: ' + 
+                     str(xlabels), fontsize=11)
+        
+        fig.savefig(self.path4 + '/' + figname, dpi=300)
+
+
+
+    def EventDataFrame(self):
+        '''Generate dataframe with the events over the chosen threshold
+        - get the Dates from events over threshold
+        - extract the day of peak intensity plus minus 2 Days
+        - run an running window of sums
+            -> start of event: at least 3*10min > .2
+            -> end of event: at least 1h of =< .1??
+        '''
+        
+        
+    def flagging(self):
+        ''' flag potential errors and threshold events?
+        '''
+        
         
         
         '''
-        
-        percent_selection = np.round(np.float(np.size(selected))/np.float(np.size(df))*100, 2)   
-        
-           
-    
-        print 'Total record size: ', total_rec, ' instances \n'
-        print 'Percent NaN: ', , '%\n'
-        print 'Percent zeros: ', , '\n'
-        print 'Percent wet (> 0.1mm)', , '\n'
-        print 'Percent 0.1mm', , '\n'
-        print 'Percent DWD light: ', , '\n'
-        print 'Percent DWD moderate: ', , '\n'
-        print 'Percent DWD heavy: ', , '\n'
-        print 'Percent DWD very heavy: ', , '\n'
-        print 'Percent "torrential": ', , '\n'
-    
-    
-        # create stats dataframe with rows= statnrs and columns= length and percentages
-        # last rows: mean and std??
-        ZAMG_statistics.loc[zamg.statlist[i]] =  [rec_len_years, nr_days_with_P,
-                                                 perc_wet_days, total_rec,
-                                                 np.size(total_02mm), perc_wet, perc_zero, perc_nan,
-                                                 perc_drizzle]
-        ZAMG_stats_float = pd.DataFrame(ZAMG_statistics, dtype='float')
-        ZAMG_stats_float.describe()
-        np.round(ZAMG_stats_float.describe(),2)
-    
-    
-    def temporal_distribution(self, percentile):
-        get temporal distributions of extremes of categories (min, h, d, 3d)
-        over time (year, month, day, hour of the day)
-        
+        does the peak intensity time vary from year to year?
+       
         df = self.dataframe
         # return index of the maximum values for each station
+        # station record
         max_dates_stations = dataframe.idxmax()       
-        
+            # gives for each date the station that had the highest value for the day
+    data.idxmax(axis=1)
+    
+    # for each station the date where the station had its max
+    data.idxmax(axis=0) 
+    
         # Values of max intensities per station
-        dates = pd.to_datetime(max_dates_stations.values)
-        
-        # peak intensity times
-        plt.hist(dates.year)
-        plt.hist(dates.month)
-        plt.hist(dates.day)
-        plt.hist(dates.minute)
-        plt.hist(dates.hour)
+        pd_dates = pd.to_datetime(max_dates_stations.values)
+
         
         # days at which more than one station had its maximum
         # normalize index for min and h data?
@@ -319,41 +362,5 @@ class StationDataFrame:
     dataframe.count(1)
     
     
-    # records / number of total daily sums in summer sample
-    total_sum = data.count(0).sum()
     
-    # DRIZZLE
-    drizzle_selector = (data < 0.2) & (data > 0)
-    drizzle_precip = data[drizzle_selector]
-    total_drizzle_days = drizzle_precip.count(0).sum()
-    # percentage of drizzle < 0.19mm/10min
-    
-    # DRY DAYS
-    zero_selector = data==0
-    drydays = data[zero_selector]
-    total_drydays = drydays.count(0).sum()
-    
-    # MISSING VALUES
-    nan_selector = pd.isnull(data)
-    nan_precip = data[nan_selector]
-    total_nan = nan_precip.count(0).sum()
-    
-    # PRECIP GREATER 0.1mm/day
-    mm_selector = data > 0.1
-    total_02mm = data[mm_selector]
-    total_wet_days = total_02mm.count(0).sum()
-    
-    perc_wet = np.float(total_wet_days)/np.float(total_sum) * 100.0
-    
-    perc_drizzle = np.float(total_drizzle_days)/np.float(total_sum) * 100.0
-    
-    perc_dry = np.float(total_drydays)/np.float(total_sum) * 100.0
-    
-    greater100 = data[data>100]
-    greater100 = greater100.dropna(how='all')
-    
-    # gives for each date the station that had the highest value for the day
-    data.idxmax(axis=1)
-    
-    # for each station the date where the station had its max
-    data.idxmax(axis=0)   '''
+   '''
