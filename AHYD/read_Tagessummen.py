@@ -172,7 +172,66 @@ if errors_test==0:
 else:
     print 'Error! Check for inconsistencies'
     
+''' ---------------------------------------------------
+EDIT 23.7.2015:
+-------------------------------------------------------
+---------------------------------------------------
+- found out that one stationnumber in List was duplicated (114801)
+- Values of statnr 114793 were missing instead
+- following snipped changed that series in place of the npy
+'''
 
+eachStatNr = '114793'
+
+emptylist = []
+skip=20
+while True:
+    try:
+        print 'skipping ', skip, 'lines in header'
+        ha = pd.read_csv(str(pth) + '\N-Tagessummen-' + eachStatNr + '.csv',
+                         sep=';', skipinitialspace=True, header=None,
+                         skiprows=skip, index_col=0, parse_dates=True,
+                         dayfirst=True, names=['date',str(eachStatNr)],
+                         skipfooter=1, engine='python')
+
+        # ha[str(eachStatNr)] = ha[str(eachStatNr)].apply(lambda x: x.replace(",",".")).astype(float)
+        ha[eachStatNr] = ha[eachStatNr].apply(lambda x: x.replace(",",".")).astype(float)
+        # replace missing values with NaN
+        selector = ha<0
+        ha[selector] = None
+
+        ha.index.min            
+        
+        emptylist.append(ha)
+        print '---------------------'
+        print 'Read file sucessfully!'
+        print '---------------------'
+        break
+    except AttributeError:
+        skip = skip+1
+        if skip > 30:
+            print 'something wrong with ', eachStatNr
+            # erroneous_files.append(eachStatNr)
+            break
+        else:
+            print 'AttributeError detected, skip ',skip, 'lines in header'
+
+    except ValueError:
+        skip = skip+1
+        if skip > 30:
+            print 'something wrong with ', eachStatNr
+            # erroneous_files.append(eachStatNr)
+            break
+        else:
+            print 'ValueError detected, skip ',skip, 'lines in header'
+del skip
+
+# drops the duplicate column of stations ['114801']
+AHYD_all_stations_1 = AHYD_all_stations.T.groupby(level=0).first().T
+
+AHYD_all_stations_2 = pd.concat((AHYD_all_stations_1, ha), axis=1)
+
+AHYD_all_stations_2.to_pickle(src + '\AHYD_dailysums.npy')
 
 
 
