@@ -308,16 +308,174 @@ class StationDataFrame:
         
         fig.savefig(self.path4 + '/' + figname, dpi=300)
 
-
-
-    def EventDataFrame(self):
-        '''Generate dataframe with the events over the chosen threshold
-        - get the Dates from events over threshold
-        - extract the day of peak intensity plus minus 2 Days
-        - run an running window of sums
-            -> start of event: at least 3*10min > .2
-            -> end of event: at least 1h of =< .1??
+    def EventDays(self, outfile):
         '''
+        Filter sample by wet and dry days
+        start point wet day event: day > 2mm
+        end point: dry day (< 2mm)
+        -----------------------------------------------------------
+        OUTPUT:
+        DataFrame with stationwise statistics (MultiIndex)
+        * first day of event
+        * length of event
+        * total sum
+        * mean rain rate [mm/d]
+        * max daily rainfall
+        '''
+        
+        # resampling ensures that the timestamp of the datetime index is the same
+        # WARNING: 7-7am recordings will be assigned 0-24h
+        df_values = self.dataframe.resample('1D', how='sum',closed='left', label='left',
+                                base=0)
+              
+        df_daily = self.dataframe.resample('1D', how='sum',closed='left', label='left',
+                                        base=0)
+        # assign dry (0) and wet days (1) 
+        df_daily[df_daily >= 1] = 1
+        df_daily[df_daily < 1] = 0  
+        
+        # preallocate list where Event ID data will be stored
+        #listall = [0] * len(df_daily.columns.values)
+        #list_stats = [0] * len(df_daily.columns.values)
+        Stats_Dict = {}
+        
+        # loop through all stations in the dataset
+        for station, loop in zip(df_daily.columns.values, range(len(df_daily.columns.values))):
+            print loop, 'st/th station processed (', station, ')'
+            # treat each station as series
+            Series = df_daily[station]
+            
+            
+            count = 0
+            array_event = []
+            # preallocate dict where the first day for each event is stored
+            startday_dict = {}
+            
+            # loop through observations in each station series
+            for x, t in zip(Series, range(len(Series))):
+                # print 'step: ', t, ' value: ', x
+                # if first observation is positive don't check for preceding day
+                # assign event ID '1'
+                if np.logical_and(t==0, x==1):
+                    count = count+1
+                    array_event.append(count)
+                    startday = Series.index[t]
+                    startday_dict.update({count : startday})
+                    print 'first day in record is wet! Event counter: ', count
+                # if first observation is NaN, assign NaN
+                elif np.logical_and(t==0, pd.isnull(Series[t])):
+                        array_event.append(np.nan)            
+                        print 'first day missing value! Event counter: ', count
+                        
+                # if observation is either 1 or 0:
+                else:
+                    # if day is dry (='0') assign NaN for dry days
+                    if x==0:
+                        array_event.append(np.nan)
+                        print 'dry day', 'event counter: ', count
+                    elif np.isnan(x):
+                        array_event.append(np.nan)
+                        print 'no value day', 'event counter: ', count
+                    # assign an event ID for wet days. Consecutive wet days get the
+                    # same ID
+                    else:
+                        # assign the same event ID for consecutive wet days
+                        if Series[t-1] == 1:
+                            array_event.append(count)
+                            print 'consecutive wet day! Event counter: ', count
+                        # assign new event ID if a dry day preceded the wet day
+                        else:
+                            count = count+1
+                            array_event.append(count)
+                            # save the date of the first day of event
+                            startday = Series.index[t]
+                            startday_dict.update({count : startday})
+                            print 'wet day after dry or no value day! Event counter: ', count
+            # print array_event
+            '''for each station record add the event ID column, which attributes a
+            number to events of consecutive wet days if at least one zero or NaN
+            day is in between
+            '''
+            df = pd.DataFrame({station: df_values[station], station + '_eventID': array_event})
+            
+            # group by Events from 1 to x
+            byEvent = df.groupby(station + '_eventID')
+            # sum, average, max of observation within event
+            stats = byEvent.agg([np.sum, np.mean, len, np.max])
+                       
+            stats.columns = stats.columns.get_level_values(1)            
+            stats.columns = ['sum', 'mean rain rate', 'duration', 'max daily']
+#            print 'length stats', len(stats)            
+#            print 'length startdates', len(startday_dict.values())
+            
+            # add column to dataframe: date of the first wet day and use ans index
+            stats['firstday'] =  startday_dict.values()       
+            stats.index = stats.firstday
+            
+            # listall[loop] = df
+            # list of all statistics
+            # list_stats[loop] = stats
+            
+            Stats_Dict.update({station: stats}) 
+        
+        #DayEventStatistics_all = pd.concat(list_stats, axis=1)
+        
+        DayStatistics_DataFrame = pd.concat(Stats_Dict, axis=1)       
+        DayStatistics_DataFrame.to_pickle(self.path2 + '/'+ outfile + '_wet_day_event_statistics.npy')
+        # save the dataframe of all stations and event IDs
+        #DF_all = pd.concat(listall, axis=1)
+        #DF_all.to_pickle(self.path2 + '/'+ outfile + '_wet_day_events.npy')
+        return DayStatistics_DataFrame
+        
+
+    def EventHours(self):
+        ''' Within the wet day events look for hourly resolved events
+        start point: hour > .19mm
+        end point: hour < .19mm (0r 2h?)
+        ---------------------------------------------------
+        OUTPUT:
+        - DataFrame with Events per station
+        * start point
+        * duration
+        * mean rain rate [mm/h]
+        * max h intensity [mm/h]
+        * peaks [mm/10 or 5min]
+        '''
+        
+        # scan all Events in each station record
+        for station in DayFrame.columns.get_level_values(0):
+            print 'processing hourly events in ', station
+
+            # firstday and duration of each event
+            for date, duration in zip(DayFrame[station].dropna(how='all').duration.reset_index().firstday,
+                                      DayFrame[station].dropna(how='all').duration.reset_index().duration):
+                print 'start', date, ' :', duration, ' days'
+                scan_rng = pd.date_range(date, periods=duration, freq='D')
+                start = str(scan_rng[0].date())
+                end = str(scan_rng[-1].date())
+
+                ScanInterval = self.dataframe[start:end] 
+                ScanInterval.resample('1H', how=[np.sum, pd.Series.count, len],
+                                      closed='left', label='left', base=0)
+                
+                
+                
+                # calculate rolling sum.                            
+                pd.rolling_sum(ScanInterval, window=6, min_periods=5, center=True)
+                # time stamp at HH:20 sums up intervals from HH:00 to HH:50
+                
+                
+                pd.rolling_sum(ZAMG_all_stations['2012-08-20'], window=1, min_periods=1, freq='1H', how='sum')            
+            
+            df_values = self.dataframe.resample('1D', how='sum',closed='left', label='left',
+                                    base=0)
+                  
+            df_daily = self.dataframe.resample('1D', how='sum',closed='left', label='left',
+                                            base=0)
+            # assign dry (0) and wet days (1) 
+            df_daily[df_daily >= 1] = 1
+            df_daily[df_daily < 1] = 0 
+        
         
         
     def flagging(self):
