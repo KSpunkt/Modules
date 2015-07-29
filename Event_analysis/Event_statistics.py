@@ -11,7 +11,52 @@ import matplotlib.pyplot as plt
 from itertools import izip
 
 
-class StationDataFrame:
+
+def resample_valid(df, res, valid, **kwargs):    
+    ''' 
+    METHOD:
+    * resamples DataFrame with resample function
+    * rows where number of missing values exceed threshold are set to NaN
+    -----------------------------------------------------------------------
+    INPUT:
+    * df: pd.DataFrame
+    * res: resolution to be resampled to
+    * valid: Minimum number of valid values per resample interval
+      e.g.: 10min to 1H: '5' --> 5 out of 6, 1 NaN per hour accepted
+    * ** kwargs: pass resample arguments
+    -----------------------------------------------------------------------
+    OUTPUT:
+    * resampled DataFrame where intervals with too few valid data points are
+      set to NaN
+    -----------------------------------------------------------------------
+    '''
+    Ser_D = {}
+    df1 = df.resample(res, how=[np.sum, pd.Series.count], closed='left',
+                     label='left', **kwargs)
+    # drop all rows where the count != len
+    querystr = 'count >= ' + str(valid)
+    print 'query string: ', querystr
+    counter = 0
+    for station in df.columns.get_level_values(0):
+        counter = counter + 1
+        print 'processing station ', station
+        print counter
+        Series = df1[station].query(querystr)
+        if Series.empty:
+            Series = df1[station]['sum']
+            Ser_D.update({station: Series})
+        else:
+            # re-insert NaN for dropped rows and rename column
+            Series = Series['sum']
+            Series = Series.resample(res)
+            Ser_D.update({station: Series})
+   
+    df_new = pd.concat(Ser_D, axis=1)
+    df_new.columns = df_new.columns.get_level_values(0)
+    return df_new
+
+
+class Eventframe:
     ''' 
     ------------------------------------------------
     Methods to analyse observed station net datasets and identify extremes
@@ -22,23 +67,31 @@ class StationDataFrame:
     '''  
     
     def __init__(self, dataframe, resolution='10min', season=[1, 12],
-                 resampling=False):
-        ''' class instance stationfiles (n=len(statnrs)*len(yrs))
-        --------------------
-        Class  attributes:
-        --------------------
-        dataframe: pd.DataFrame with DateTime Index
-        resolution: temporal resolution of dataframe (frequency of pd.dataFrame)
+                 resampling=False, valid=0):
+        ''' 
+        METHOD:
+        * class instance stationfiles (n=len(statnrs)*len(yrs))
+        -----------------------------------------------------------------------
+        Class  attributes / INPUT:
+        * dataframe: pd.DataFrame with DateTime Index      
+        * resolution: temporal resolution of dataframe (frequency of pd.dataFrame)
                     default: '10min'
-        resampling: resample Dataframe to other temporal resolution
+        * season: first and last month to be included in the DataFrame
+        * resampling: resample Dataframe to other temporal resolution
                     default: False
                     options: '10min', '60Min', '1H', '24H' '1D', '3D'
-        season: first and last month to be included in the DataFrame
+        * valid: minimum number of valid datapoints in resample interval, 
+          default = 0
+        -----------------------------------------------------------------------
+        OUTPUT:
+        * Instance of Class
+        -----------------------------------------------------------------------
         '''
         
         self.resolution = resolution
         self.resampling = resampling
-        self.season = season 
+        self.season = season
+        self.valid = valid
         
         self.path1 = r'I:\DOCUMENTS\WEGC\02_PhD_research\04_Programming\Python\Data_Analysis'
         self.path2 = r'I:\DOCUMENTS\WEGC\02_PhD_research\04_Programming\Python\Data_Analysis\Events'
@@ -53,10 +106,10 @@ class StationDataFrame:
             print 'no resampling'
         else:
             print 'resampling dataframe to ', self.resampling
-            self.dataframe = self.dataframe.resample(self.resampling, how='sum',
-                                               closed='left', label='left',
-                                               base=0).dropna(axis=0,
-                                                              how='all')
+            self.dataframe = resample_valid(self.dataframe, self.resampling,
+                                            valid = self.valid, base=0).dropna(axis=0,
+                                                                         how=
+                                                                         'all')
                                                         
         # Thresholds selectors: boolean matrices returning selection              
         self.thres_sel = {'5min' : {'heavy Wussow (>=5)': self.dataframe>=5,
@@ -121,10 +174,18 @@ class StationDataFrame:
         self.occ_over_thres = occ_over_thres        
       
     def get_percentiles(self):
-        ''' calculate percentiles all data in frame (all stations, all times)
-        *** output: [p95, p98, p99, p99.9]
-        *** !!! ignores zeros !!!
-        *** and number of occurrences over percentile
+        ''' 
+        METHOD:
+        * calculate percentiles all data in frame (all stations, all times)
+        * !!! ignores zeros !!!
+        -----------------------------------------------------------------------
+        INPUT:
+        * DataFrame instance of class
+        -----------------------------------------------------------------------
+        OUTPUT:
+        * [p95, p98, p99, p99.9]
+        * and number of occurrences over percentile
+        -----------------------------------------------------------------------
         '''
         tet = self.dataframe.values
         tet[tet==0] = np.nan
@@ -142,13 +203,18 @@ class StationDataFrame:
         return percentiles_dict
         
     def desription_tofile(self, outfile):
-        ''' calculate basic statistics on 
+        ''' 
+        METHOD:        
+        calculate basic statistics on 
         *** years, days, stations in record
         *** counts of NAN, Zero, drizzle, DWD intensity categories
+        -----------------------------------------------------------------------
         INPUT:
         *** filename (use datasource, res, season)
+        -----------------------------------------------------------------------
         OUTPUT:
         *** txt file with basic numbers and sttaistics
+        -----------------------------------------------------------------------
         '''
    
         # write results to file
@@ -170,13 +236,15 @@ class StationDataFrame:
                     [f.write('''{}: {}\n'''.format(key1, np.round(value1,2)))]
         
     def events_over_threshold(self, threshold, outfile):
-        ''' Save dates of extreme events exceeding a defined threshold.
-        
+        ''' 
+        METHOD:
+        * Save dates of extreme events exceeding a defined threshold.
+        * Save figure of year, month, hour of events
+        -----------------------------------------------------------------------
         INPUT:
         *** threshold: [mm] dates of periods with higher sums will be saved
         *** filename:  'str': name of file to be saved as csv and npy
-
-        
+        -----------------------------------------------------------------------
         OUTPUT:
         - destination directory is:
           r'I:\DOCUMENTS\WEGC\02_PhD_research\04_Programming\Python\Tables\Events_over_threshold'
@@ -184,6 +252,7 @@ class StationDataFrame:
           where at least one station exceeded the threshold
         - saves csv of dates, station ID and sums of highest station
         - transposed csv can be joined to a GIS station shapefile for visualization
+        -----------------------------------------------------------------------
         '''
 
         csvname = outfile + '.csv'
@@ -199,7 +268,7 @@ class StationDataFrame:
         Times = [] 
         # write csv file with date, daily sum, max hourly sum and max 10min intensity
         print 'Save dates of extreme precip intervals to csv ...'
-        for i in range(len(idx)):
+        for i in enumerate(idx):
             formattedate = str(idx.day[i]) + '.' + str(idx.month[i]) + '.' + str(idx.year[i])
             formattedtime = str(idx.hour[i]) + ':' + str(idx.minute[i])
             Dates = np.append(Dates, formattedate)
@@ -212,7 +281,7 @@ class StationDataFrame:
             return
         else:
             print 'Calculate daily and hourly sums days with extreme periods'
-            for i in range(len(Dates)):
+            for i in enumerate(Dates):
                 day = str(idx.year[i]) + '-' + str(idx.month[i]) + '-' + str(idx.day[i])
                 df_day_xtr = self.dataframe[day]
                 # sum up all 10min bin from one day
@@ -308,12 +377,18 @@ class StationDataFrame:
         
         fig.savefig(self.path4 + '/' + figname, dpi=300)
 
-    def EventDays(self, outfile):
+    def EventDays(self, outfile, valid=0):
         '''
-        Filter sample by wet and dry days
-        start point wet day event: day > 2mm
-        end point: dry day (< 2mm)
-        -----------------------------------------------------------
+        METHOD:
+        * Filter sample by wet and dry days
+        * start point wet day event: day > 2mm
+        * end point: dry day (< 2mm)
+        -----------------------------------------------------------------------
+        INPUT:
+        * valid: minimum number of valid records in one day to calculate a
+          daily sum (depends on the resolution of class instance!)
+          default=0
+        -----------------------------------------------------------------------
         OUTPUT:
         DataFrame with stationwise statistics (MultiIndex)
         * first day of event
@@ -321,15 +396,15 @@ class StationDataFrame:
         * total sum
         * mean rain rate [mm/d]
         * max daily rainfall
+        -----------------------------------------------------------------------
         '''
         
         # resampling ensures that the timestamp of the datetime index is the same
         # WARNING: 7-7am recordings will be assigned 0-24h
-        df_values = self.dataframe.resample('1D', how='sum',closed='left', label='left',
-                                base=0)
-              
-        df_daily = self.dataframe.resample('1D', how='sum',closed='left', label='left',
-                                        base=0)
+        df_values = resample_valid(self.dataframe, '1D', valid=valid, base=0)      
+  
+        df_daily = resample_valid(self.dataframe, '1D', valid=valid, base=0)   
+        
         # assign dry (0) and wet days (1) 
         df_daily[df_daily >= 1] = 1
         df_daily[df_daily < 1] = 0  
@@ -340,7 +415,7 @@ class StationDataFrame:
         Stats_Dict = {}
         
         # loop through all stations in the dataset
-        for station, loop in zip(df_daily.columns.values, range(len(df_daily.columns.values))):
+        for station, loop in zip(df_daily.columns.values, enumerate(df_daily.columns.values)):
             print loop, 'st/th station processed (', station, ')'
             # treat each station as series
             Series = df_daily[station]
@@ -352,7 +427,7 @@ class StationDataFrame:
             startday_dict = {}
             
             # loop through observations in each station series
-            for x, t in zip(Series, range(len(Series))):
+            for x, t in zip(Series, enumerate(Series)):
                 # print 'step: ', t, ' value: ', x
                 # if first observation is positive don't check for preceding day
                 # assign event ID '1'
@@ -396,7 +471,8 @@ class StationDataFrame:
             number to events of consecutive wet days if at least one zero or NaN
             day is in between
             '''
-            df = pd.DataFrame({station: df_values[station], station + '_eventID': array_event})
+            df = pd.DataFrame({station: df_values[station],
+                               station + '_eventID': array_event})
             
             # group by Events from 1 to x
             byEvent = df.groupby(station + '_eventID')
@@ -428,27 +504,33 @@ class StationDataFrame:
         return DayStatistics_DataFrame
         
 
-    def EventHours(self):
-        ''' Within the wet day events look for hourly resolved events
-        start point: hour > .19mm
-        end point: hour < .19mm (0r 2h?)
-        ---------------------------------------------------
+    def EventHours(self, WetDayFrame):
+        ''' 
+        METHOD:
+        * Within the wet day events look for hourly resolved events
+        * start point: hour > .19mm
+        * end point: hour < .19mm (0r 2h?)
+        -----------------------------------------------------------------------
+        INPUT:
+        * pd.DataFrame of wet days (all days with values will be scanned)
+        -----------------------------------------------------------------------
         OUTPUT:
-        - DataFrame with Events per station
-        * start point
-        * duration
-        * mean rain rate [mm/h]
-        * max h intensity [mm/h]
-        * peaks [mm/10 or 5min]
+        * DataFrame with Events per station: 
+        * - start point
+        * - duration
+        * - mean rain rate [mm/h]
+        * - max h intensity [mm/h]
+        * - peaks [mm/10 or 5min]
+        -----------------------------------------------------------------------
         '''
         
         # scan all Events in each station record
-        for station in DayFrame.columns.get_level_values(0):
+        for station in WetDayFrame.columns.get_level_values(0):
             print 'processing hourly events in ', station
 
             # firstday and duration of each event
-            for date, duration in zip(DayFrame[station].dropna(how='all').duration.reset_index().firstday,
-                                      DayFrame[station].dropna(how='all').duration.reset_index().duration):
+            for date, duration in zip(WetDayFrame[station].dropna(how='all').duration.reset_index().firstday,
+                                      WetDayFrame[station].dropna(how='all').duration.reset_index().duration):
                 print 'start', date, ' :', duration, ' days'
                 scan_rng = pd.date_range(date, periods=duration, freq='D')
                 start = str(scan_rng[0].date())
@@ -458,14 +540,13 @@ class StationDataFrame:
                 ScanInterval.resample('1H', how=[np.sum, pd.Series.count, len],
                                       closed='left', label='left', base=0)
                 
-                
-                
-                # calculate rolling sum.                            
-                pd.rolling_sum(ScanInterval, window=6, min_periods=5, center=True)
-                # time stamp at HH:20 sums up intervals from HH:00 to HH:50
-                
-                
-                pd.rolling_sum(ZAMG_all_stations['2012-08-20'], window=1, min_periods=1, freq='1H', how='sum')            
+                # drop all rows where the count != len
+                ScanInterval = ScanInterval.query('count==len')
+                # re-insert NaN for dropped rows
+                ScanInterval = ScanInterval['sum']
+                ScanInterval = ScanInterval.resample('1H')
+               
+          
             
             df_values = self.dataframe.resample('1D', how='sum',closed='left', label='left',
                                     base=0)
@@ -476,10 +557,17 @@ class StationDataFrame:
             df_daily[df_daily >= 1] = 1
             df_daily[df_daily < 1] = 0 
         
+
         
-        
-    def flagging(self):
-        ''' flag potential errors and threshold events?
+def flagging(self):
+        ''' 
+        METHOD:
+        flag potential errors and threshold events?
+        -----------------------------------------------------------------------
+        INPUT:
+        -----------------------------------------------------------------------
+        OUTPUT:
+        -----------------------------------------------------------------------
         '''
         
         
