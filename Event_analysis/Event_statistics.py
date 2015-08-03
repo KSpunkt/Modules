@@ -39,7 +39,7 @@ def resample_valid(df, res, valid, **kwargs):
     counter = 0
     for station in df.columns.get_level_values(0):
         counter = counter + 1
-        print 'processing station ', station
+        #print 'processing station ', station
         print counter
         Series = df1[station].query(querystr)
         if Series.empty:
@@ -145,8 +145,12 @@ class Eventframe:
         records = []
         for eachCol in self.dataframe.columns:
             series = self.dataframe[eachCol].dropna()
-            rec_len = len(range(series.index.year[0], series.index.year[-1]+1))
-            records.append(rec_len)
+            if series.empty:
+                rec_len = np.nan
+                records.append(rec_len)
+            else:
+               rec_len = len(range(series.index.year[0], series.index.year[-1]+1))
+               records.append(rec_len)
         records = np.hstack(records)
         
         self.years = {'longest':[records.max()], 
@@ -401,10 +405,10 @@ class Eventframe:
         
         # resampling ensures that the timestamp of the datetime index is the same
         # WARNING: 7-7am recordings will be assigned 0-24h
-             
-  
-        df_daily = resample_valid(self.dataframe, '1D', valid=valid, base=0)   
-        df_values = df_daily        
+        df_daily = resample_valid(self.dataframe, '1D', valid=valid, base=0) 
+        # save a dataframe with the [mm] values
+        df_values = resample_valid(self.dataframe, '1D', valid=valid, base=0) 
+        
         
         # assign dry (0) and wet days (1) 
         df_daily[df_daily >= 1] = 1
@@ -420,8 +424,7 @@ class Eventframe:
             print loop, 'st/th station processed (', station, ')'
             # treat each station as series
             Series = df_daily[station]
-            
-            
+ 
             count = 0
             array_event = []
             # preallocate dict where the first day for each event is stored
@@ -475,6 +478,8 @@ class Eventframe:
             df = pd.DataFrame({station: df_values[station],
                                station + '_eventID': array_event})
             
+            print 'Dataframe of events \n', df.head()
+            
             # group by Events from 1 to x
             byEvent = df.groupby(station + '_eventID')
             # sum, average, max of observation within event
@@ -489,9 +494,24 @@ class Eventframe:
             stats['firstday'] =  startday_dict.values()       
             stats.index = stats.firstday
             
-            # listall[loop] = df
-            # list of all statistics
-            # list_stats[loop] = stats
+            ''' UNDER CONSTUCTION START
+            GET ORIGINAL DATAFRAME TO
+            * calculate percentage of NaN during event
+            * exctract peak intensities
+            '''
+            # make scan range +1 so that last rec of scanning is the midnight 
+            # observaiton of the following day
+            scan_rng = pd.date_range(firstday, periods=dur+1, freq='D')
+            ScanInterval = self.dataframe.ix[scan_rng[0]:scan_rng[-1]].loc[station]
+            self.dataframe.loc['firstday', station]
+            self.dataframe.loc[station].max() 
+            #------------------------------------------------------------------
+            # by event = hourly frame grouped by event indices. use the frame
+            # to extract the high res data from original dataframe? 
+            byEvent.index()
+            '''
+            UNDER CONSTUCTION END
+            '''
             
             Stats_Dict.update({station: stats}) 
         
@@ -505,7 +525,7 @@ class Eventframe:
         return DayStatistics_DataFrame
         
 
-    def EventHours(self, WetDayFrame, outfile):
+    def EventHours(self, WetDayFrame, outfile, valid=0):
         ''' 
         METHOD:
         * Within the wet day events look for hourly resolved events
@@ -514,6 +534,8 @@ class Eventframe:
         -----------------------------------------------------------------------
         INPUT:
         * pd.DataFrame of wet days (all days with values will be scanned)
+        * valid: number of required valid records in building hourly sums
+          e.g., 10min data: 5 would mean 5/6; 5min data: 5 would mean 5/12
         -----------------------------------------------------------------------
         OUTPUT:
         * DataFrame with Events per station: 
@@ -528,6 +550,7 @@ class Eventframe:
         idx = pd.IndexSlice        
         dur = WetDayFrame.loc[idx[:], idx[:,'duration']].max(axis=1)
         
+        # ScanFrame: Dataframe of all wet days as found in EventDays
         ScanFrameList = []
         for day, dur in zip(dur.index, dur.values):
             print day, 'dur', dur        
@@ -537,9 +560,11 @@ class Eventframe:
             ScanInterval = self.dataframe.ix[scan_rng[0]:scan_rng[-1]]
             ScanFrameList.append(ScanInterval)
         ScanFrame = pd.concat(ScanFrameList)
+        print 'ScanFrame head: \n', ScanFrame.head()        
         
         # resample the frame to get hourly sums
-        df_hourly = resample_valid(ScanFrame, '1H', valid=5)
+        df_hourly = resample_valid(ScanFrame, '1H', valid=valid)
+        df_values = resample_valid(ScanFrame, '1H', valid=valid)
         # assign dry (0) and wet hours (1) 
         df_hourly[df_hourly >= .2] = 1
         df_hourly[df_hourly < .2] = 0         
@@ -562,35 +587,35 @@ class Eventframe:
             # loop through observations in each station series
             for [t, x] in enumerate(Series):
                 # print 'step: ', t, ' value: ', x
-                # if first observation is positive don't check for preceding day
+                # if first observation is positive don't check for preceding hr
                 # assign event ID '1'
                 if np.logical_and(t==0, x==1):
                     count = count+1
                     array_event.append(count)
                     starthour = Series.index[t]
                     starthour_dict.update({count : starthour})
-                    print 'first hour in record is wet! Event counter: ', count
+                    #print 'first hour in record is wet! Event counter: ', count
                 # if first observation is NaN, assign NaN
                 elif np.logical_and(t==0, pd.isnull(Series[t])):
                         array_event.append(np.nan)            
-                        print 'first hour missing value! Event counter: ', count
+                        #print 'first hour missing value! Event counter: ', count
                         
                 # if observation is either 1 or 0:
                 else:
                     # if hour is dry (='0') assign NaN for dry hours
                     if x==0:
                         array_event.append(np.nan)
-                        print 'dry hour', 'event counter: ', count
+                        # print 'dry hour', 'event counter: ', count
                     elif np.isnan(x):
                         array_event.append(np.nan)
-                        print 'no value hour', 'event counter: ', count
+                        # print 'no value hour', 'event counter: ', count
                     # assign an event ID for wet hour. Consecutive wet hour get the
                     # same ID
                     else:
                         # assign the same event ID for consecutive wet hours
                         if Series[t-1] == 1:
                             array_event.append(count)
-                            print 'consecutive wet jour! Event counter: ', count
+                            # print 'consecutive wet hour! Event counter: ', count
                         # assign new event ID if a dry hour preceded the wet hour
                         else:
                             count = count+1
@@ -598,13 +623,15 @@ class Eventframe:
                             # save the date of the first hour of event
                             starthour = Series.index[t]
                             starthour_dict.update({count : starthour})
-                            print 'wet hour after dry or no value hour! Event counter: ', count
-            # print array_event
+                            # print 'wet hour after dry or no value hour! Event counter: ', count
+            print count, 'events detected'
+
+            
             '''for each station record add the event ID column, which attributes a
             number to events of consecutive wet hours if at least one zero or NaN
             hour is in between
             '''
-            df = pd.DataFrame({station: ScanFrame[station],
+            df = pd.DataFrame({station: df_values[station],
                                station + '_eventID': array_event})
             
             # group by Events from 1 to x
@@ -621,15 +648,13 @@ class Eventframe:
             stats['firsthour'] =  starthour_dict.values()       
             stats.index = stats.firsthour
             
-            # listall[loop] = df
-            # list of all statistics
-            # list_stats[loop] = stats
+
             
             Stats_Hourly_Dict.update({station: stats}) 
         
         #hourEventStatistics_all = pd.concat(list_stats, axis=1)
         
-        hourStatistics_DataFrame = pd.concat(Stats_Dict, axis=1)       
+        hourStatistics_DataFrame = pd.concat(Stats_Hourly_Dict, axis=1)       
         hourStatistics_DataFrame.to_pickle(self.path2 + '/'+ outfile + '_wet_hour_event_statistics.npy')
         # save the dataframe of all stations and event IDs
         #DF_all = pd.concat(listall, axis=1)

@@ -217,3 +217,103 @@ def event_matrix(event, orientation, filename):
                 edgecolor='none')
         close(fig)
     
+def OneZero(dataframe, resample='1D', divide=1, valid=0):
+    ''' 
+        METHOD:
+    * Figure to show event detection algorithm (days one-zero, hours one-zero)
+    -----------------------------------------------------------------------
+    INPUT:
+    * dataframe
+    *divide: threshold greater equal will be 1, smaller will be zero
+    -----------------------------------------------------------------------
+    OUTPUT:
+
+    -----------------------------------------------------------------------
+    '''
+    
+    
+    
+    colors = ['#000000', '#ffffff']
+    cmap = matplotlib.colors.ListedColormap(colors, name=u'precip', N=None)
+    
+    if type(dataframe) is pd.core.series.Series:
+        print 'series'
+        dataframe = pd.concat([dataframe, dataframe], axis=1)
+        dataframe.columns = ['one', 'two']
+        onezero = resample_valid(dataframe, resample, valid, base=0) 
+    
+    else:
+        onezero = resample_valid(dataframe, resample, valid, base=0) 
+    
+    # assign dry (0) and wet days (1) 
+    onezero[onezero >= divide] = 1
+    onezero[onezero < divide] = 0  
+    
+    
+    # preallocate station x time array
+    event_intenisty_matrix = np.empty((len(onezero.columns), len(onezero.index)))
+    # fill intensities into array  
+    for [i, eachStation] in enumerate(onezero.columns.values):
+        data = onezero[eachStation].values
+        event_intenisty_matrix[i,:] = data   
+    X = event_intenisty_matrix
+    
+    #### ----------- 
+    ## PLOT
+    #### -----------
+    
+    fig = plt.figure(figsize=[8, .8])
+    ax = fig.gca()
+    fig.suptitle("Wet day events", fontsize=14)
+    fig.set_facecolor('#d3d3d3')
+    ax.set_aspect('auto')
+    ax.set_position((0.1, 0.1, .9, .3))
+    x_lims = [onezero.index.to_pydatetime()[0], onezero.index.to_pydatetime()[-1]]
+    x_lims = mdates.date2num(x_lims)
+    y_lims = [0, len(onezero.columns)]
+    
+    # ---------------------
+    ax.imshow(X, interpolation='nearest', cmap=cmap,
+                    extent = [x_lims[0], x_lims[1],  y_lims[0], y_lims[1]],
+                    origin='lower', aspect='auto')
+                     #aspect='auto') 
+    # ---------------------
+                    
+    # plt.colorbar(im, orientation='vertical')
+    #ax.patch.set_facecolor('gray')
+    
+    # ---------------------
+    # ---- X AXIS PROPERTIES ----
+    # ---------------------
+#        ax.yaxis.grid(True, which="minor")   
+#    ax.xaxis_date()
+    ax.xaxis.set_minor_locator(mdates.DayLocator(0,
+                                                    interval=1))
+    #ax.xaxis.set_minor_formatter(mdates.DateFormatter('%d'))
+    # ax.xaxis.grid(True, which="minor")
+    ax.xaxis.grid()
+    ax.xaxis.set_major_locator(mdates.MonthLocator())
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('\n\n\n%b'))    
+    
+    # ---------------------
+    # ---- Y AXIS PROPERTIES ----
+    # ---------------------
+    # ax.set_ylabel('stations', fontsize=10)      
+#        plt.xticks(arange(79), station_order['synnr'].values, fontsize=5)
+#        plt.setp(ax.get_xticklabels(), rotation=90)
+    #ax.yaxis.set_ticks(arange(79))
+    # ax.set_yticklabels(onezero.columns.values, fontsize=6, rotation=0) 
+    ax.set_yticklabels([], fontsize=6, rotation=0) 
+    savefig(r'I:\DOCUMENTS\WEGC\02_PhD_research\01_Documents\Papers\Paper_1/wetday.png',
+            dpi=300)
+    close(fig)
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
