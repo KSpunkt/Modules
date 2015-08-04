@@ -34,6 +34,31 @@ Dayframe = ZAMG.EventDays('test_ZAMG_10min_JJA_2010')
 Hourframe = ZAMG.EventHours(Dayframe, 'test_ZAMG_10min_JJA_2010')       
 
 
-pd.read(path2 + '/'+ outfile + '_wet_day_event_statistics.npy')
-        idx = pd.IndexSlice        
-        SumFrame = DayFrame.loc[idx[:], idx[:,'sum']]
+
+Dayframe.xs('max daily', level=1, axis=1).max(axis=1).order(ascending=False)
+
+
+#pd.read(path2 + '/'+ outfile + '_wet_day_event_statistics.npy')
+#        idx = pd.IndexSlice        
+#        SumFrame = DayFrame.loc[idx[:], idx[:,'sum']]
+
+
+peak1 = Dayframe.xs('peak 1', level=1, axis=1).max(axis=1).order(ascending=False)
+duration = Dayframe.xs('duration', level=1, axis=1).max(axis=1).order(ascending=False)
+
+
+peak1 = Dayframe.xs('peak 1', level=1, axis=1)
+duration = Dayframe.xs('duration', level=1, axis=1)
+
+for station in Dayframe.columns.get_level_values(0):
+    plt.plot(Dayframe[station].duration.values, Dayframe[station]['peak 1'].values, marker='x', linestyle='')
+    plt.xlim([0,10])
+    plt.ylim([0,50])
+    
+for [i, station] in enumerate(Hourframe.columns.get_level_values(0)):
+    plt.plot(Hourframe[station].duration.values, Hourframe[station]['peak 1'].values, marker='x', linestyle='')
+    plt.xlim([0,20])
+    plt.ylim([0,30])
+    print i
+    ''' ONLY 76 stations have peak values - why!?
+    '''

@@ -561,7 +561,7 @@ class Eventframe:
         # yields for each day the longest duration (max()) of all stations
         
         # (works 2015-08-04):
-        Dayframe.iloc[:, Dayframe.columns.get_level_values(1)=='duration'].max(axis=1) 
+        # Dayframe.iloc[:, Dayframe.columns.get_level_values(1)=='duration'].max(axis=1) 
         # yields the same: (works 2015-08-04):
         dur = Dayframe.xs('duration', level=1, axis=1).max(axis=1)   
         
@@ -662,11 +662,7 @@ class Eventframe:
             # add column to dataframe: date of the first wet hour and use ans index
             stats['firsthour'] =  starthour_dict.values()       
             stats.index = stats.firsthour
-            
-            
-            ''' UNDER CONSTRUCTION START
-            '''            
-            
+
             ''' 
             For each event in station record, use ORIGINAL DATAFRAME TO
             * calculate percentage of NaN during event
@@ -675,7 +671,7 @@ class Eventframe:
             
             for [i, eachFirstHour], dur in zip(enumerate(stats.firsthour), stats.duration):
                 # make scan range +1 so that last rec of scanning is the first 
-                # observaiton of the following hour
+                # observation of the following hour
                 scan_rng = pd.date_range(eachFirstHour, periods=dur+1, freq='H')
                 # get original raw data for the event span
                 ScanInterval = self.rawinputdata[station].ix[scan_rng[0]:scan_rng[-1]]
@@ -690,8 +686,7 @@ class Eventframe:
                 stats.loc[stats.firsthour[i], 'perc nan'] = perc_nan
                 
                 #------------------------------------------------------------------
-                ''' UNDER CONSTRUCTION END
-                '''
+
             
             Stats_Hourly_Dict.update({station: stats}) 
         
