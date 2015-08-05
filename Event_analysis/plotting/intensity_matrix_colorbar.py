@@ -219,7 +219,7 @@ def event_matrix(event, orientation, filename):
     
 def OneZero(dataframe, resample='1D', divide=1, valid=0):
     ''' 
-        METHOD:
+    METHOD:
     * Figure to show event detection algorithm (days one-zero, hours one-zero)
     -----------------------------------------------------------------------
     INPUT:

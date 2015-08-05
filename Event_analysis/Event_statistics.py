@@ -472,7 +472,9 @@ class Eventframe:
                             startday = Series.index[t]
                             startday_dict.update({count : startday})
                             ##print 'wet day after dry or no value day! Event counter: ', count
-            print count, ' events in station record'
+            print count, ' events in station record', 'len array event', len(array_event)
+            if count == 0:
+                print 'station ', station, 'is null'
             '''for each station record add the event ID column, which attributes a
             number to events of consecutive wet days if at least one zero or NaN
             day is in between
@@ -496,33 +498,39 @@ class Eventframe:
             stats['firstday'] =  startday_dict.values()       
             stats.index = stats.firstday
             
-            ''' 
-            For each event in station record, use ORIGINAL DATAFRAME TO
-            * calculate percentage of NaN during event
-            * exctract peak intensities
-            '''
-            
-            for [i, eachFirstDay], dur in zip(enumerate(stats.firstday), stats.duration):
-                # make scan range +1 so that last rec of scanning is the midnight 
-                # observaiton of the following day
-                scan_rng = pd.date_range(eachFirstDay, periods=dur+1, freq='D')
-                # get original raw data for the event span
-                ScanInterval = self.rawinputdata[station].ix[scan_rng[0]:scan_rng[-1]]
-     
-                peaks = ScanInterval.order(ascending=False)[0:3]
-                           
-                stats.loc[stats.firstday[i], 'peak 1'] = peaks.values[0]
-                stats.loc[stats.firstday[i], 'peak 2'] = peaks.values[1]
-                stats.loc[stats.firstday[i], 'peak 3'] = peaks.values[2]
-                
-                perc_nan = (1-(np.float(ScanInterval.count())/np.float(len(ScanInterval))))*100               
-                stats.loc[stats.firstday[i], 'perc nan'] = perc_nan
-               
-                mh = ScanInterval.resample('1H', how='sum').order(ascending=False)[0:3]              
-                stats.loc[stats.firstday[i], 'max h 1'] = mh.values[0]
-                stats.loc[stats.firstday[i], 'max h 2'] = mh.values[1]
-                
-                #------------------------------------------------------------------
+            # if no event in Station, add nans as peaks
+            if stats.firstday.empty:
+                stats1 = pd.DataFrame(columns=['peak 1', 'peak 2', 'peak 3',
+                                               'perc nan', 'max h 1', 'max h 2'])
+                stats = pd.concat([stats, stats1], axis=1)
+            else:
+                ''' 
+                For each event in station record, use ORIGINAL DATAFRAME TO
+                * calculate percentage of NaN during event
+                * exctract peak intensities
+                '''
+                print 'check 1', loop
+                for [i, eachFirstDay], dur in zip(enumerate(stats.firstday), stats.duration):
+                    # make scan range +1 so that last rec of scanning is the midnight 
+                    # observaiton of the following day
+                    scan_rng = pd.date_range(eachFirstDay, periods=dur+1, freq='D')
+                    # get original raw data for the event span
+                    ScanInterval = self.rawinputdata[station].ix[scan_rng[0]:scan_rng[-1]]
+         
+                    peaks = ScanInterval.order(ascending=False)[0:3]
+                               
+                    stats.loc[stats.firstday[i], 'peak 1'] = peaks.values[0]
+                    stats.loc[stats.firstday[i], 'peak 2'] = peaks.values[1]
+                    stats.loc[stats.firstday[i], 'peak 3'] = peaks.values[2]
+                    
+                    perc_nan = (1-(np.float(ScanInterval.count())/np.float(len(ScanInterval))))*100               
+                    stats.loc[stats.firstday[i], 'perc nan'] = perc_nan
+                   
+                    mh = ScanInterval.resample('1H', how='sum').order(ascending=False)[0:3]              
+                    stats.loc[stats.firstday[i], 'max h 1'] = mh.values[0]
+                    stats.loc[stats.firstday[i], 'max h 2'] = mh.values[1]
+                    
+                    #------------------------------------------------------------------
 
             Stats_Dict.update({station: stats}) 
         
@@ -662,30 +670,36 @@ class Eventframe:
             # add column to dataframe: date of the first wet hour and use ans index
             stats['firsthour'] =  starthour_dict.values()       
             stats.index = stats.firsthour
-
-            ''' 
-            For each event in station record, use ORIGINAL DATAFRAME TO
-            * calculate percentage of NaN during event
-            * exctract peak intensities
-            '''
             
-            for [i, eachFirstHour], dur in zip(enumerate(stats.firsthour), stats.duration):
-                # make scan range +1 so that last rec of scanning is the first 
-                # observation of the following hour
-                scan_rng = pd.date_range(eachFirstHour, periods=dur+1, freq='H')
-                # get original raw data for the event span
-                ScanInterval = self.rawinputdata[station].ix[scan_rng[0]:scan_rng[-1]]
-     
-                peaks = ScanInterval.order(ascending=False)[0:3]
-                           
-                stats.loc[stats.firsthour[i], 'peak 1'] = peaks.values[0]
-                stats.loc[stats.firsthour[i], 'peak 2'] = peaks.values[1]
-                stats.loc[stats.firsthour[i], 'peak 3'] = peaks.values[2]
+            # if no event in Station, add nans as peaks
+            if stats.firsthour.empty:
+                stats1 = pd.DataFrame(columns=['peak 1', 'peak 2', 'peak 3',
+                                               'perc nan'])
+                stats = pd.concat([stats, stats1], axis=1)
+            else:
+                ''' 
+                For each event in station record, use ORIGINAL DATAFRAME TO
+                * calculate percentage of NaN during event
+                * exctract peak intensities
+                '''
                 
-                perc_nan = (1-(np.float(ScanInterval.count())/np.float(len(ScanInterval))))*100               
-                stats.loc[stats.firsthour[i], 'perc nan'] = perc_nan
-                
-                #------------------------------------------------------------------
+                for [i, eachFirstHour], dur in zip(enumerate(stats.firsthour), stats.duration):
+                    # make scan range +1 so that last rec of scanning is the first 
+                    # observation of the following hour
+                    scan_rng = pd.date_range(eachFirstHour, periods=dur+1, freq='H')
+                    # get original raw data for the event span
+                    ScanInterval = self.rawinputdata[station].ix[scan_rng[0]:scan_rng[-1]]
+         
+                    peaks = ScanInterval.order(ascending=False)[0:3]
+                               
+                    stats.loc[stats.firsthour[i], 'peak 1'] = peaks.values[0]
+                    stats.loc[stats.firsthour[i], 'peak 2'] = peaks.values[1]
+                    stats.loc[stats.firsthour[i], 'peak 3'] = peaks.values[2]
+                    
+                    perc_nan = (1-(np.float(ScanInterval.count())/np.float(len(ScanInterval))))*100               
+                    stats.loc[stats.firsthour[i], 'perc nan'] = perc_nan
+                    
+                    #------------------------------------------------------------------
 
             
             Stats_Hourly_Dict.update({station: stats}) 
