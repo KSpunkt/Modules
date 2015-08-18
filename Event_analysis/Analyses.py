@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import csv
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 from itertools import izip
 
 path2 = r'I:\DOCUMENTS\WEGC\02_PhD_research\04_Programming\Python\Data_Analysis\Events'
@@ -18,143 +19,166 @@ plotpath = r'I:\DOCUMENTS\WEGC\02_PhD_research\04_Programming\Python\Data_Analys
 
 ''' IMPORT RAW DATA
 '''
-AHYD_all_stations = pd.read_pickle(src + '\AHYD_dailysums.npy')
+#AHYD_all_stations = pd.read_pickle(src + '\AHYD_dailysums.npy')
 ZAMG_all_stations = pd.read_pickle(pth2 + '\ZAMG_10min_allyear.npy')
 
-# Mariapfarr crazy Rain
-ZAMG_all_stations['11348']['19970703'].loc[ZAMG_all_stations['11348']['19970703']>30] = np.nan
-ZAMG_all_stations['11348']['19970704'].loc[ZAMG_all_stations['11348']['19970704']>30] = np.nan
+''' SET DETECTED OUTLIERS TO NO VALUE AND SAVE DATES TO FILE
+'''
+ZAMG_all_stations['11348']['19970701':'19970710'].loc[ZAMG_all_stations['11348']['19970701':'19970710']>0] = np.nan
 ZAMG_all_stations['11265']['20060802'].loc[ZAMG_all_stations['11265']['20060802']>50] = np.nan
+ZAMG_all_stations['11270']['20070319'].loc[ZAMG_all_stations['11270']['20070319']>50] = np.nan
+ZAMG_all_stations['11270']['20070320'].loc[ZAMG_all_stations['11270']['20070320']>50] = np.nan
+ZAMG_all_stations['11216']['20011108'].loc[ZAMG_all_stations['11216']['20011108']>00] = np.nan
 
 import Modules.Event_analysis.Event_statistics as es
 '''
 Create Eventframe instance to analyze datasets (percent of NaN per event are
 calculated independent of required valid numbers for resampling )
 '''
-ZAMG_JJA = es.Eventframe(ZAMG_all_stations, resolution='10min', season=[6,8])
+ZAMG_reduced = pd.concat([ZAMG_all_stations['11173']['2012'], ZAMG_all_stations['11148']['2012']], axis=1)
+
+ZAMG = es.Eventframe(ZAMG_all_stations, resolution='10min', season=[3,11])
 
 '''Get wet day and wet hour events in station dataframe'''                  
-Dayframe = ZAMG_JJA.EventDays('ZAMG_10min_JJA') 
-Hourframe = ZAMG_JJA.EventHours(Dayframe, 'ZAMG_10min_JJA')       
-
-'''get the maximum numbers of the event based statistics'''
-Dayframe.xs('max daily', level=1, axis=1).max(axis=1).order(ascending=False)
+Dayframe = ZAMG.EventDays('ZAMG_MarNov_10mm', wet_day_threshold=1) 
+Dayframe.columns.names = ['station', 'indicator']    
+Hourframe = ZAMG.EventHours(Dayframe, 'ZAMG_MarNov_Days10mm')   
 
 
-peaks_1_top50 = Dayframe.xs('peak 1', level=1, axis=1).max(axis=1).order(ascending=False)[0:51]
-durations_D_top50 = Dayframe.xs('duration', level=1, axis=1).max(axis=1).order(ascending=False)[0:51]
-
-
-''' Max value for axes in plot'''
-peak1_D = Dayframe.xs('peak 1', level=1, axis=1).max().max()
-duration_D = Dayframe.xs('duration', level=1, axis=1).max().max()
-
-peak1_H = Hourframe.xs('peak 1', level=1, axis=1).max().max()
-duration_H = Hourframe.xs('duration', level=1, axis=1).max().max()
-
-
-plt.plot(Dayframe[station].index.month, Dayframe[station]['duration'].values,
-             marker='x', linestyle='', color='red')
 
 '''----------------------------------------------------------------------------
 #### ----------- 
-## PLOT
+## PLOT DAY EVENTS
 #### -----------    
 ----------------------------------------------------------------------------'''    
 fig, [[ax, ax1], [ax2, ax3]] = plt.subplots(2,2,  figsize=(13, 10))
-fig.suptitle("Day Events ZAMG 10min, JJA", fontsize=12)
-''' Event duration against high resolution peaks '''
-for station in Dayframe.columns.get_level_values(0):
-    ax.plot(Dayframe[station].duration.values, Dayframe[station]['peak 1'].values,
-             marker='x', linestyle='', color='red')
-    ax.plot(Dayframe[station].duration.values, Dayframe[station]['peak 2'].values,
-             marker='x', linestyle='', color='orange')
-    ax.plot(Dayframe[station].duration.values, Dayframe[station]['peak 3'].values,
-             marker='x', linestyle='', color='yellow')         
-    ax.set_xlim([0, 30])# duration_H])
-    ax.set_ylim([0, 60])# peak1_D])
-    ax.grid(which='major')
-    ax.set_ylabel('peaks (1st, 2nd, 3rd) [mm/10min]', fontsize=8) 
-    ax.set_xlabel('event duration [consecutive wet days (>2mm)]', fontsize=8) 
-    #ax.set_yscale('log')
-    
-    ''' Event duration against daily maxima '''
-    ax1.plot(Dayframe[station].duration.values, Dayframe[station]['max daily'].values,
-             marker='x', linestyle='', color='red')        
-#    ax1.set_xlim([0, 30])# duration_H])
-#    ax1.set_ylim([0, 60])# peak1_D])
-    ax1.grid(which='major')
-    ax1.set_ylabel('max day [mm/d]', fontsize=8) 
-    ax1.set_xlabel('event duration [consecutive wet days (>2mm)]', fontsize=8) 
-    #ax1.set_yscale('log')
-    
-    ''' Event duration against hourly maxima ''' 
-    ax2.plot(Dayframe[station].duration.values, Dayframe[station]['max h 1'].values,
-             marker='x', linestyle='', color='red')
-    ax2.plot(Dayframe[station].duration.values, Dayframe[station]['max h 2'].values,
-             marker='x', linestyle='', color='orange')      
-#    ax2.set_xlim([0, 30])# duration_H])
-#    ax2.set_ylim([0, 60])# peak1_D])
-    ax2.grid(which='major')
-    ax2.set_ylabel('max hourly (1st, 2nd) [mm/h]', fontsize=8) 
-    ax2.set_xlabel('event duration [consecutive wet days (>2mm)]', fontsize=8) 
-    #ax2.set_yscale('log')      
+fig.suptitle("Day Events ZAMG 10min", fontsize=12)
 
-    ''' Event duration against hourly maxima '''    
-    ax3.plot(Dayframe[station].duration.values, Dayframe[station]['mean rain rate'].values,
-             marker='x', linestyle='', color='red')    
-#    ax3.set_xlim([0, 30])# duration_H])
-#    ax3.set_ylim([0, 60])# peak1_D])
-    ax3.grid(which='major')
-    ax3.set_ylabel('mean rain rate [mm/d]', fontsize=8) 
-    ax3.set_xlabel('event duration [consecutive wet days (>2mm)]', fontsize=8) 
-    #ax3.set_yscale('log') 
+axs = [ax, ax1, ax2, ax3]
+cols = ['peak 1', 'max daily', 'max h 1', 'sum']
+ylabels = ['mm/10min', 'mm/d', 'mm/d', 'total mm']
 
-fig.savefig(plotpath+'/'+ 'DayEvents_ZAMG10min_JJA', dpi=300)
+for station in Dayframe.columns.get_level_values(0).drop_duplicates():
+    for a, c in zip(axs, cols):
+        ''' Event duration against high resolution peaks '''
+        a.plot(Dayframe[station].duration.values, Dayframe[station][c].values,
+                 marker='.', linestyle='', color='red')
+        
+'''AXES PROPERTIES
+'''
+for a, l, c in zip(axs, ylabels, cols):
+    a.set_title(c)
+    a.grid(which='major')
+    a.set_ylabel(l, fontsize=8) 
+    a.set_xlabel('event duration [consecutive wet days (>2mm)]', fontsize=8) 
+    #a.set_yscale('log')    
+    
+fig.savefig(plotpath+'/'+ 'DayEvents_ZAMG_MarNov10mm', dpi=300)
                 
+'''----------------------------------------------------------------------------
+#### ----------- 
+## PLOT HOUR EVENTS
+#### -----------    
+----------------------------------------------------------------------------'''    
+            
+            
 fig, [[ax, ax1], [ax2, ax3]] = plt.subplots(2,2,  figsize=(13, 10))
-fig.suptitle("Hour Events ZAMG 10min, JJA", fontsize=12)
-    
-for [i, station] in enumerate(Hourframe.columns.get_level_values(0)):
-    ax.plot(Hourframe[station].duration.values, Hourframe[station]['peak 1'].values,
-             marker='x', linestyle='', color='red')
-    ax.plot(Hourframe[station].duration.values, Hourframe[station]['peak 2'].values,
-             marker='x', linestyle='', color='orange')
-    ax.plot(Hourframe[station].duration.values, Hourframe[station]['peak 3'].values,
-         marker='x', linestyle='', color='yellow')
-    ax.set_xlim([0, 80])#duration_H])
-    ax.set_ylim([0, 60])#peak1_H])
-    ax.set_ylabel('[mm/10min]', fontsize=8) 
-    ax.set_xlabel('event duration [consecutive wet hours (>.2mm)]', fontsize=8) 
-    
-    ''' Event duration against hourly maxima '''
-    ax1.plot(Hourframe[station].duration.values, Hourframe[station]['max hourly'].values,
-             marker='x', linestyle='', color='red')        
-#    ax1.set_xlim([0, 30])# duration_H])
-#    ax1.set_ylim([0, 60])# peak1_D])
-    ax1.grid(which='major')
-    ax1.set_ylabel('max day [mm/d]', fontsize=8) 
-    ax1.set_xlabel('event duration [consecutive wet hours (>.2mm)]', fontsize=8) 
-    #ax1.set_yscale('log')
-    
-    ''' Event duration against hourly maxima ''' 
-    ax2.plot(Hourframe[station].duration.values, Hourframe[station]['sum'].values,
-             marker='x', linestyle='', color='red') 
-#    ax2.set_xlim([0, 30])# duration_H])
-#    ax2.set_ylim([0, 60])# peak1_D])
-    ax2.grid(which='major')
-    ax2.set_ylabel('total sum [mm/event]', fontsize=8) 
-    ax2.set_xlabel('event duration [consecutive wet hours (>.2mm)]', fontsize=8) 
-    #ax2.set_yscale('log')      
+fig.suptitle("Hour Events ZAMG 10min", fontsize=12)
 
-    ''' Event duration against hourly maxima '''    
-    ax3.plot(Hourframe[station].duration.values, Hourframe[station]['mean rain rate'].values,
-             marker='x', linestyle='', color='red')    
-#    ax3.set_xlim([0, 30])# duration_H])
-#    ax3.set_ylim([0, 60])# peak1_D])
-    ax3.grid(which='major')
-    ax3.set_ylabel('mean rain rate [mm/h]', fontsize=8) 
-    ax3.set_xlabel('event duration [consecutive wet hours (>.2mm)]', fontsize=8) 
-    #ax3.set_yscale('log') 
+axs = [ax, ax1, ax2, ax3]
+cols = ['peak 1', 'max hourly', 'sum', 'mean rain rate']
+ylabels = ['mm/10min', 'mm/h', 'mm total', 'mm/h']    
+    
+for [i, station] in enumerate(Hourframe.columns.get_level_values(0).drop_duplicates()):
+    for a, c in zip(axs, cols):
+        a.plot(Hourframe[station].duration.values, Hourframe[station][c].values,
+             marker='.', linestyle='', color='red')             
 
-fig.savefig(plotpath+'/'+ 'HourEvents_ZAMG10min_JJA', dpi=300)
+'''AXES PROPERTIES
+'''
+for a, l, c in zip(axs, ylabels, cols):
+    a.set_title(c)
+    a.grid(which='major')
+    a.set_ylabel(l, fontsize=8) 
+    a.set_xlabel('event duration [consecutive wet hours ]', fontsize=8) 
+    ##a.set_yscale('log') 
+
+fig.savefig(plotpath+'/'+ 'HourEvents_ZAMG_MarNov10mm', dpi=300)
+
+
+'''----------------------------------------------------------------------------
+#### ----------- 
+## PLOT SKILL SCORE
+#### -----------    
+----------------------------------------------------------------------------'''    
+ 
+        
+ax = (1/Rankframe).plot(marker='o', markersize=5,linestyle='', legend=0,
+                        title='DAY EVENTS', colormap='Set3', logy=1)        
+ax.set_ylabel('RSS')   
+ax.set_ylim([0,1.2])
+ax.set_xlabel('') 
+
+'''----------------------------------------------------------------------------
+#### ----------- 
+## PLOT BOXPLOTS
+#### -----------    
+----------------------------------------------------------------------------'''    
+def Event_boxplot(Frame, kind='Day'):
+    if kind == 'Day':
+        ''' indicators DAY events'''
+        indicator =  ['sum', 'max daily', 'max h 1', 'peak 1'] #, 'max h 2']
+        labels = ['mm total', 'mm/d', 'mm/h', 'mm/10min'] #, 'mm/h']
+        title = 'Day events'
+    elif kind == 'Hour':
+        ''' indicators HOUR events'''
+        indicator =  ['sum', 'max hourly', 'peak 1', 'duration']
+        labels = ['mm total', 'mm/h', 'mmm/10min', 'h']
+        title = 'Hour events'
+        
+    mpl.style.use('bmh')
+#    pd.options.display.mpl_style = False
+        
+        
+    bpdict = {}
+    month = range(3,12)
+ 
+    Frame.columns.names = ['station', 'indicator']  
+    stacked = Frame.stack(['station'])
+    stacked_reset = stacked.reset_index(level=1, drop=1)
+    #del stacked_reset['station']
+    stacked_reset['absmonth'] = stacked_reset.index.month
+    
+    stacked_reset.reset_index(drop=1)
+    stacked_reset.set_index('absmonth', inplace=1)
+    
+    #fig, [[ax, ax1], [ax2, ax3], [ax4, ax5]] = plt.subplots(3,2,  figsize=(13, 10))
+    fig, [[ax, ax1], [ax2, ax3]] = plt.subplots(2,2,  figsize=(13, 10))
+    
+    fig.suptitle(title, fontsize=12)
+    
+    axs=[ax, ax1, ax2, ax3]
+    colors = ['#ffffff', '#add8e6', '#4169e1', '#ee82ee', '#b03060', '#ff1493']
+    
+    for i, axz in zip(indicator, axs):
+        ind = stacked_reset[i]
+        for m in month:
+            bpdict.update({m: ind.loc[m].values})
+        bpf = pd.DataFrame.from_dict(bpdict, orient='index').transpose()
+        plotdict = bpf.boxplot(ax=axz, whis=[1,99.9], showfliers=1)
+        plt.setp(plotdict['fliers'], color=colors[5], marker='x')
+        plt.setp(plotdict['whiskers'], color=colors[3], marker='_')
+        plt.setp(plotdict['medians'], color=colors[2], marker='_')
+        plt.setp(plotdict['caps'], color=colors[4], marker='_', linewidth=4)
+    
+    '''AXES PROPERTIES
+    '''
+    for a, i, l in zip(axs, indicator, labels):
+        a.set_title(i)
+        a.grid(which='major')
+        a.set_ylabel(l, fontsize=9) 
+        a.set_xlabel('', fontsize=8) 
+        a.set_xticklabels(['M', 'A', 'M', 'J', 'J', 'A','S', 'O', 'N'])  
+        #a.set_yscale('log')
+    fig.show()
+    fig.savefig(plotpath+'/'+ kind + '_Events_ZAMG_MarNov10mm_bp', dpi=300)

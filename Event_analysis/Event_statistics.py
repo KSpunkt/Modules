@@ -37,7 +37,7 @@ def resample_valid(df, res, valid, **kwargs):
     querystr = 'count >= ' + str(valid)
     print 'query string: ', querystr
     counter = 0
-    for station in df.columns.get_level_values(0):
+    for station in df.columns.get_level_values(0).drop_duplicates():
         counter = counter + 1
         #print 'processing station ', station
         # print counter
@@ -52,7 +52,7 @@ def resample_valid(df, res, valid, **kwargs):
             Ser_D.update({station: Series})
    
     df_new = pd.concat(Ser_D, axis=1)
-    df_new.columns = df_new.columns.get_level_values(0)
+    df_new.columns = df_new.columns.get_level_values(0).drop_duplicates()
     return df_new
 
 
@@ -383,7 +383,7 @@ class Eventframe:
         
         fig.savefig(self.path4 + '/' + figname, dpi=300)
 
-    def EventDays(self, outfile, valid=0):
+    def EventDays(self, outfile, valid=0, wet_day_threshold=1):
         '''
         METHOD:
         * Filter sample by wet and dry days
@@ -394,6 +394,8 @@ class Eventframe:
         * valid: minimum number of valid records in one day to calculate a
           daily sum (depends on the resolution of class instance!)
           default=0
+        * wet_day_threshold: [mm] - total sum a day must have (equal greater)
+          to be defined wet. default: 1mm
         -----------------------------------------------------------------------
         OUTPUT:
         DataFrame with stationwise statistics (MultiIndex)
@@ -410,12 +412,13 @@ class Eventframe:
         df_daily = resample_valid(self.rawinputdata, '1D', valid=valid, base=0) 
         # save a dataframe with the [mm] values
         df_values = resample_valid(self.rawinputdata, '1D', valid=valid, base=0) 
-        
+    
         
         # assign dry (0) and wet days (1) 
-        df_daily[df_daily >= 1] = 1
-        df_daily[df_daily < 1] = 0  
+        df_daily[df_daily < wet_day_threshold] = 0  
+        df_daily[df_daily >= wet_day_threshold] = 1
         
+        print df_daily.head()
         # preallocate list where Event ID data will be stored
         #listall = [0] * len(df_daily.columns.values)
         #list_stats = [0] * len(df_daily.columns.values)
@@ -482,18 +485,18 @@ class Eventframe:
             
             df = pd.DataFrame({station: df_values[station],
                                station + '_eventID': array_event})
+                               
             
             
             # group by Events from 1 to x
             byEvent = df.groupby(station + '_eventID')
             # sum, average, max of observation within event
-            stats = byEvent.agg([np.sum, np.mean, len, np.max])
-                      
-            stats.columns = stats.columns.get_level_values(1)            
-            stats.columns = ['sum', 'mean rain rate', 'duration', 'max daily']
-#            print 'length stats', len(stats)            
-#            print 'length startdates', len(startday_dict.values())
+            stats = byEvent.agg([np.nansum, np.nanmean, len, max])
             
+            stats.columns = stats.columns.get_level_values(1).drop_duplicates()           
+            stats.columns = ['sum', 'mean rain rate', 'duration', 'max daily']
+            
+        
             # add column to dataframe: date of the first wet day and use as index
             stats['firstday'] =  startday_dict.values()       
             stats.index = stats.firstday
@@ -503,13 +506,14 @@ class Eventframe:
                 stats1 = pd.DataFrame(columns=['peak 1', 'peak 2', 'peak 3',
                                                'perc nan', 'max h 1', 'max h 2'])
                 stats = pd.concat([stats, stats1], axis=1)
+                
             else:
                 ''' 
                 For each event in station record, use ORIGINAL DATAFRAME TO
                 * calculate percentage of NaN during event
                 * exctract peak intensities
                 '''
-                print 'check 1', loop
+                
                 for [i, eachFirstDay], dur in zip(enumerate(stats.firstday), stats.duration):
                     # make scan range +1 so that last rec of scanning is the midnight 
                     # observaiton of the following day
@@ -531,17 +535,26 @@ class Eventframe:
                     stats.loc[stats.firstday[i], 'max h 2'] = mh.values[1]
                     
                     #------------------------------------------------------------------
-
+            
+            del stats['firstday']
             Stats_Dict.update({station: stats}) 
         
         #DayEventStatistics_all = pd.concat(list_stats, axis=1)
         
-        DayStatistics_DataFrame = pd.concat(Stats_Dict, axis=1)       
+        DayStatistics_DataFrame = pd.concat(Stats_Dict, axis=1)
+#        # add event ID for each Date
+#        idxEvent = []
+#        for x in range(len(DayStatistics_DataFrame)):
+#            idxEvent = idxEvent.appen(x)
+#        DayStatistics_DataFrame['ED'] = idxEvent
+#        DayStatistics_DataFrame.set_index('ID', append=True, inplace=True)
+        
         DayStatistics_DataFrame.to_pickle(self.path2 + '/'+ outfile + '_wet_day_event_statistics.npy')
         print 'Dataframe of Day Event Statistics saved to \n',  '/', outfile, '_wet_day_event_statistics.npy'       
         # save the dataframe of all stations and event IDs
         #DF_all = pd.concat(listall, axis=1)
         #DF_all.to_pickle(self.path2 + '/'+ outfile + '_wet_day_events.npy')
+        
         return DayStatistics_DataFrame
         
 
@@ -576,21 +589,27 @@ class Eventframe:
         # ScanFrame: Dataframe of all wet days as found in EventDays
         ScanFrameList = []
         for day, dur in zip(dur.index, dur.values):
-            print day, 'dur', dur        
+                   
             # make scan range +1 so that last rec of scanning is the midnight 
             # observaiton of the following day
             scan_rng = pd.date_range(day, periods=dur+1, freq='D')
             ScanInterval = self.rawinputdata.ix[scan_rng[0]:scan_rng[-1]]
+#            ScanInterval = rawinputdata.ix[scan_rng[0]:scan_rng[-1]]
             ScanFrameList.append(ScanInterval)
         ScanFrame = pd.concat(ScanFrameList)
-        print 'ScanFrame head: \n', ScanFrame.head()        
+        print 'TEST 1 ScanFrame index duplicated?!: \n', ScanFrame.index.is_unique 
+        idx = np.unique(ScanFrame.index, return_index=True)[1]
+        ScanFrame = ScanFrame.iloc[idx]
+        print 'TEST 2 ScanFrame index duplicated?!: \n', ScanFrame.index.is_unique  
         
         # resample the frame to get hourly sums
         df_hourly = resample_valid(ScanFrame, '1H', valid=valid)
         df_values = resample_valid(ScanFrame, '1H', valid=valid)
+        
         # assign dry (0) and wet hours (1) 
+        df_hourly[df_hourly < .2] = 0 
         df_hourly[df_hourly >= .2] = 1
-        df_hourly[df_hourly < .2] = 0         
+        
        
 
         # preallocate dict where Event ID data will be stored
@@ -660,18 +679,17 @@ class Eventframe:
             # group by Events from 1 to x
             byEvent = df.groupby(station + '_eventID')
             # sum, average, max of observation within event
-            stats = byEvent.agg([np.sum, np.mean, len, np.max])
-                       
-            stats.columns = stats.columns.get_level_values(1)            
-            stats.columns = ['sum', 'mean rain rate', 'duration', 'max hourly']
-#            print 'length stats', len(stats)            
-#            print 'length startdates', len(starthour_dict.values())
+            stats = byEvent.agg([np.nansum, np.nanmean, len, max])
             
+                      
+            stats.columns = stats.columns.get_level_values(1).drop_duplicates()         
+            stats.columns = ['sum', 'mean rain rate', 'duration', 'max hourly']
+
             # add column to dataframe: date of the first wet hour and use ans index
             stats['firsthour'] =  starthour_dict.values()       
             stats.index = stats.firsthour
             
-            # if no event in Station, add nans as peaks
+            # if no event in Station, add nans instead of peaks
             if stats.firsthour.empty:
                 stats1 = pd.DataFrame(columns=['peak 1', 'peak 2', 'peak 3',
                                                'perc nan'])
@@ -700,8 +718,8 @@ class Eventframe:
                     stats.loc[stats.firsthour[i], 'perc nan'] = perc_nan
                     
                     #------------------------------------------------------------------
-
-            
+            del stats['firsthour']
+            #print 'stats head\n\n', stats.head(20)
             Stats_Hourly_Dict.update({station: stats}) 
         
         #hourEventStatistics_all = pd.concat(list_stats, axis=1)
@@ -711,59 +729,114 @@ class Eventframe:
         # save the dataframe of all stations and event IDs
         #DF_all = pd.concat(listall, axis=1)
         #DF_all.to_pickle(self.path2 + '/'+ outfile + '_wet_hour_events.npy')
-        print 'Dataframe of Day Event Statistics saved to /', outfile, '_wet_hour_event_statistics.npy'       
+        print 'Dataframe of Hour Event Statistics saved to /', outfile, '_wet_hour_event_statistics.npy'       
         
         return hourStatistics_DataFrame
 
+def RSS(Dayframe):
+    ''' 
+    METHOD:
+    * calculate ranked skill score of events in IndicatorFrame
+    * rank each event based on indicators I(1)-I(n)
+    * RSS(E) = sum of all ranks
+    -----------------------------------------------------------------------
+    INPUT:
+    * Dataframe of event statistics (hourly or daily?)
+    -----------------------------------------------------------------------
+    OUTPUT:
+    * table of individual ranks
+    * list of RSS
+    -----------------------------------------------------------------------
+    '''
+    
+    ''' Each indicator of each station is ranked from 1-N (stationwise)
+    for more than one value of the same size, they get the same rank, but the
+    following gets the rank according to its position, not value. So if two
+    max values are the same, the second highest value is the third highest
+    observation and ranked '3'.
+    '''
+    rankdict = {}
+    # ranks from high to low (highest gets '1', lowest 'N')
+    rank_cols_hi = ['max daily', 'peak 1', 'peak 2', 'mean rain rate',
+                    'max h 1']
+    # ranks from low to high (lowest gets '1', highest 'N')
+    rank_cols_lo = ['duration', 'perc nan']
+                 
+    for col in rank_cols_hi:         
+        ranks = Dayframe.xs(col, level=1, axis=1).rank(method='min',
+                                                        na_option='keep',
+                                                        ascending=0)
+        rankdict.update({col: ranks})   
+                                             
+    for col in rank_cols_lo:        
+        ranks = Dayframe.xs(col, level=1, axis=1).rank(method='min',
+                                                        na_option='keep',
+                                                        ascending=1)        
+        rankdict.update({col: ranks})   
+        rankframe = pd.concat(rankdict, axis=1)
+    
+    
+    ''' Ranked Skill Score Dataframe:
+    '''
+    RSS_dict = {}
+    norm = len(rankframe.columns.get_level_values(0).drop_duplicates())
+    for station in Dayframe.columns.get_level_values(0).drop_duplicates():
+        RSS = (rankframe.xs(station, level=1, axis=1).sum(axis=1)/norm).rank(method='min',
+                                                                    na_option='keep',
+                                                                    ascending=1)
+        RSS_dict.update({station: RSS})
+        RSS_frame = pd.concat(RSS_dict, axis=1)
+   
+    return RSS_frame    
         
 def flagging(self):
-        ''' 
-        METHOD:
-        flag potential errors and threshold events?
-        -----------------------------------------------------------------------
-        INPUT:
-        -----------------------------------------------------------------------
-        OUTPUT:
-        -----------------------------------------------------------------------
-        '''
-        
-        
-        
-        '''
-        does the peak intensity time vary from year to year?
-       
-        df = self.dataframe
-        # return index of the maximum values for each station
-        # station record
-        max_dates_stations = dataframe.idxmax()       
-            # gives for each date the station that had the highest value for the day
-    data.idxmax(axis=1)
+    ''' 
+    METHOD:
+    flag potential errors and threshold events?
+    -----------------------------------------------------------------------
+    INPUT:
+    -----------------------------------------------------------------------
+    OUTPUT:
+    -----------------------------------------------------------------------
+    '''
     
-    # for each station the date where the station had its max
-    data.idxmax(axis=0) 
-    
-        # Values of max intensities per station
-        pd_dates = pd.to_datetime(max_dates_stations.values)
+        
+        
+    '''
+    does the peak intensity time vary from year to year?
+   
+    df = self.dataframe
+    # return index of the maximum values for each station
+    # station record
+    max_dates_stations = dataframe.idxmax()       
+        # gives for each date the station that had the highest value for the day
+data.idxmax(axis=1)
 
-        
-        # days at which more than one station had its maximum
-        # normalize index for min and h data?
-        dup_dates = dates[dates.duplicated()]
-        # which dates occur how often?
-        dates.value_counts()
+# for each station the date where the station had its max
+data.idxmax(axis=0) 
+
+    # Values of max intensities per station
+    pd_dates = pd.to_datetime(max_dates_stations.values)
+
     
+    # days at which more than one station had its maximum
+    # normalize index for min and h data?
+    dup_dates = dates[dates.duplicated()]
+    # which dates occur how often?
+    dates.value_counts()
+
+
+
+# dates over 99th percentile
+
+  
     
-    
-    # dates over 99th percentile
-    
-      
-        
-    dataframe.describe()
-    # how many valid records per station:
-    dataframe.count(0)
-    # how many valid records per date
-    dataframe.count(1)
-    
-    
-    
+dataframe.describe()
+# how many valid records per station:
+dataframe.count(0)
+# how many valid records per date
+dataframe.count(1)
+
+
+
    '''
