@@ -16,7 +16,7 @@ def resample_valid(df, res, valid, **kwargs):
     ''' 
     METHOD:
     * resamples DataFrame with resample function
-    * rows where number of missing values exceed threshold are set to NaN
+    * rows where number of missing values exceed threshold can be set to NaN
     -----------------------------------------------------------------------
     INPUT:
     * df: pd.DataFrame
@@ -408,7 +408,7 @@ class Eventframe:
         '''
         
         # resampling ensures that the timestamp of the datetime index is the same
-        # WARNING: 7-7am recordings will be assigned 0-24h
+        print "WARNING: 7-7am recordings will be assigned 0-24h"
         df_daily = resample_valid(self.rawinputdata, '1D', valid=valid, base=0) 
         # save a dataframe with the [mm] values
         df_values = resample_valid(self.rawinputdata, '1D', valid=valid, base=0) 
@@ -788,6 +788,7 @@ def RSS(Dayframe):
         RSS_frame = pd.concat(RSS_dict, axis=1)
    
     return RSS_frame    
+     
         
 def flagging(self):
     ''' 

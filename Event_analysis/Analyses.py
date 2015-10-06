@@ -158,7 +158,8 @@ ax.set_xlabel('')
 ## PLOT BOXPLOTS
 #### -----------    
 ----------------------------------------------------------------------------'''    
-def Event_boxplot(Frame, kind='Day'):
+def Event_boxplot(Frame, kind='Day', filename_extension='',
+                  title_extension=''):
     if kind == 'Day':
         ''' indicators DAY events'''
         indicator =  ['sum', 'max daily', 'max h 1', 'peak 1'] #, 'max h 2']
@@ -189,7 +190,7 @@ def Event_boxplot(Frame, kind='Day'):
     #fig, [[ax, ax1], [ax2, ax3], [ax4, ax5]] = plt.subplots(3,2,  figsize=(13, 10))
     fig, [[ax, ax1], [ax2, ax3]] = plt.subplots(2,2,  figsize=(9, 9))
     
-    fig.suptitle(title, fontsize=12)
+    fig.suptitle(title +', '+ title_extension, fontsize=12)
     
     axs=[ax, ax1, ax2, ax3]
     colors = ['#ffffff', '#add8e6', '#4169e1', '#ee82ee', '#b03060', '#ff1493']
@@ -207,9 +208,11 @@ def Event_boxplot(Frame, kind='Day'):
     
     '''AXES PROPERTIES
     '''
-    for a, i, l in zip(axs, indicator, labels):
+    scale = [[0,300],[0,100],[0,50],[0,100]]
+    for a, i, l, scl in zip(axs, indicator, labels, scale):
         a.set_title(i)
         a.grid(which='minor')
+        a.set_ylim(scl)
         a.set_ylabel(l, fontsize=9) 
         a.set_xlabel('', fontsize=8) 
         a.set_xticklabels(['M', 'A', 'M', 'J', 'J', 'A','S', 'O', 'N'])  
@@ -223,6 +226,83 @@ def Event_boxplot(Frame, kind='Day'):
                 xycoords='figure fraction')
     ax3.annotate('fliers > p99.9', (.09,.82), color=colors[5],
                 xycoords='figure fraction')
+       
     fig.show()
-    fig.savefig(plotpath+'/'+ kind + '_Events_ZAMG_MarNov10mm_bp_leg', dpi=300)
+    fig.savefig(plotpath+'/'+ kind + '_Events_ZAMG_MarNov10mm_bp_leg_' +
+                 filename_extension, dpi=300)
+
+
+'''----------------------------------------------------------------------------
+ANALYZE HOUR EVENTS 
+-------------------------------------------------------------------------------
+'''
+# load hour events data frame 'hedf'
+
+hedf = pd.read_pickle(r'I:/DOCUMENTS/WEGC/02_PhD_research/04_Programming/Python/Data_Analysis/Events/ZAMG_MarNov_Days10mm_wet_hour_event_statistics.npy')
+hedf.columns.names = ['station', 'indicator']
+
+
+'''CHOOSE HOUR EVENTS BY TIME'''
+hedf_in = hedf[np.logical_and(hedf.index.hour > 15,
+                              np.logical_or(hedf.index.month == 3,
+                                            hedf.index.month == 4,
+                                            hedf.index.month == 5)
+                              )]
+
+
+'''# accsess dataframe?
+hedf.iloc[:, hedf.columns.get_level_values(1)=='duration']
+# drops 'duration'
+df_dur = hedf.xs('duration', level=1, axis=1) == 3
+dur_3 = hedf[hedf.xs('duration', level='indicator', axis=1, drop_level=0)==3]
+'''
+      
+''' ---------------------------------------------------------------------------
+STACK THE DATAFRAME ON STATIONS (station as index, not column)'''
+stk = hedf_in.stack('station') 
+
+''' ---------------------------------------------------------------------------
+ANY ADJUSTMENTS OR STATS CALCULATIONS BY INDICATOR (e.g., duration) 
+AND MEASURE (e.g., mean(), max(), quantile(q=.5))
+''' 
+#dur_short = stk[stk.duration<5]  
+#dur_long =  stk[stk.duration>5]  
+
+''' date and station of the max values'''
+#idx_by_indicator = stk.groupby('duration').idxmax().head()
+
+'''calculate statistical measure of the sample'''
+#sample_by_indicator = stk.groupby('duration').mean()
+#sample_by_indicator = stk.groupby('duration').max()
+sample_by_indicator = stk.groupby('duration').quantile(q=.99)
+
+''' ---------------------------------------------------------------------------
+FIGURE
+
+plot duration on the x axis, hourly and 10 min peaks in spring autumn summer
+
+plot duration on the x axis and onset time after noon or pre noon for the seasons
+
+* highest peaks in record in summer, short time, and afternoon onset
+'''
+title = ''
+
+fig, [[ax, ax1], [ax2, ax3]] = plt.subplots(2,2,  figsize=(9, 9))
+
+fig.suptitle(title, fontsize=12)
+
+axs=[ax, ax1, ax2, ax3]
+colors = ['#ffffff', '#add8e6', '#4169e1', '#ee82ee', '#b03060', '#ff1493']
+ 
+
+sample_by_indicator[['peak 1', 'max hourly']][0:24].plot(ax=ax1, kind='bar',
+                  color=[colors[2], colors[3]], logy=0, legend=0)
+
+
+
+
+
+# get p 95 by duration
+
+
 
