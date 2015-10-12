@@ -93,6 +93,8 @@ class Eventframe:
         self.season = season
         self.valid = valid
         
+        ZAMG_daily_Tmax = pd.read_pickle(r'I:\DOCUMENTS\WEGC\02_PhD_research\03_Data\ZAMG\processed_data\DAILY\ZAMG_daily_Tmax_1992-2004.npy')
+        self.ZAMG_tag = ZAMG_daily_Tmax
         
         self.path1 = r'I:\DOCUMENTS\WEGC\02_PhD_research\04_Programming\Python\Data_Analysis'
         self.path2 = r'I:\DOCUMENTS\WEGC\02_PhD_research\04_Programming\Python\Data_Analysis\Events'
@@ -486,8 +488,6 @@ class Eventframe:
             df = pd.DataFrame({station: df_values[station],
                                station + '_eventID': array_event})
                                
-            
-            
             # group by Events from 1 to x
             byEvent = df.groupby(station + '_eventID')
             # sum, average, max of observation within event
@@ -504,7 +504,8 @@ class Eventframe:
             # if no event in Station, add nans as peaks
             if stats.firstday.empty:
                 stats1 = pd.DataFrame(columns=['peak 1', 'peak 2', 'peak 3',
-                                               'perc nan', 'max h 1', 'max h 2'])
+                                               'perc nan', 'max h 1', 'max h 2', 
+                                               'Tmax_z', 'Tmax_a'])
                 stats = pd.concat([stats, stats1], axis=1)
                 
             else:
@@ -533,6 +534,12 @@ class Eventframe:
                     mh = ScanInterval.resample('1H', how='sum').order(ascending=False)[0:3]              
                     stats.loc[stats.firstday[i], 'max h 1'] = mh.values[0]
                     stats.loc[stats.firstday[i], 'max h 2'] = mh.values[1]
+                    # add ZAMG Tmax of the onset day and the day prior to onset day
+                    stats.loc[stats.firstday[i], 'Tmax_z'] = self.ZAMG_tag[station].loc[stats.firstday[i]]
+                    # print 'stats.firstday[i]: ', stats.firstday[i]
+                    #get location of Tmax preceding the onset day
+                    loc_prec = (self.ZAMG_tag[station].index.get_loc(stats.firstday[i]))-1
+                    stats.loc[stats.firstday[i], 'Tmax_a'] = self.ZAMG_tag[station][loc_prec]
                     
                     #------------------------------------------------------------------
             
@@ -692,7 +699,7 @@ class Eventframe:
             # if no event in Station, add nans instead of peaks
             if stats.firsthour.empty:
                 stats1 = pd.DataFrame(columns=['peak 1', 'peak 2', 'peak 3',
-                                               'perc nan'])
+                                               'perc nan', 'Tmax_z', 'Tmax_a'])
                 stats = pd.concat([stats, stats1], axis=1)
             else:
                 ''' 
@@ -717,6 +724,25 @@ class Eventframe:
                     perc_nan = (1-(np.float(ScanInterval.count())/np.float(len(ScanInterval))))*100               
                     stats.loc[stats.firsthour[i], 'perc nan'] = perc_nan
                     
+                    # add ZAMG Tmax of the onset day and the day prior to onset day
+                    # only use day, reset onset hour to 00:00:00
+                    day = pd.DatetimeIndex([stats.firsthour[i]]).normalize()[0]
+                   # print 'day:  ', day
+                    stats.loc[stats.firsthour[i], 'Tmax_z'] = self.ZAMG_tag[station].loc[day]
+                    #get location of Tmax preceding the onset day
+                    loc_prec = (self.ZAMG_tag[station].index.get_loc(day))-1
+                   # print 'loc_prec:', loc_prec, 'type: ', type(loc_prec)
+                    stats.loc[stats.firsthour[i], 'Tmax_a'] = self.ZAMG_tag[station][loc_prec]
+                    ''' # add ZAMG Tmax of the onset day and the day prior to onset day
+                    stats.loc[stats.firstday[i], 'Tmax_z'] = self.ZAMG_tag[station].loc[stats.firstday[i]]
+                    print 'stats.firstday[i]: ', stats.firstday[i]
+                    #get location of Tmax preceding the onset day
+                    loc_prec = (self.ZAMG_tag[station].index.get_loc(stats.firstday[i]))-1
+                    stats.loc[stats.firstday[i], 'Tmax_a'] = self.ZAMG_tag[station][loc_prec]'''   
+   
+   
+   
+   
                     #------------------------------------------------------------------
             del stats['firsthour']
             #print 'stats head\n\n', stats.head(20)

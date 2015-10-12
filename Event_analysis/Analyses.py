@@ -22,7 +22,7 @@ plotpath = r'I:\DOCUMENTS\WEGC\02_PhD_research\04_Programming\Python\Data_Analys
 '''
 #AHYD_all_stations = pd.read_pickle(src + '\AHYD_dailysums.npy')
 ZAMG_all_stations = pd.read_pickle(pth2 + '\ZAMG_10min_allyear.npy')
-ZAMG_daily_Tmax = pd.read_pickle(r'I:\DOCUMENTS\WEGC\02_PhD_research\03_Data\ZAMG\processed_data\DAILY\ZAMG_daily_Tmax_1992-2004.npy')
+#ZAMG_daily_Tmax = pd.read_pickle(r'I:\DOCUMENTS\WEGC\02_PhD_research\03_Data\ZAMG\processed_data\DAILY\ZAMG_daily_Tmax_1992-2004.npy')
 
 
 ''' SET DETECTED OUTLIERS TO NO VALUE AND SAVE DATES TO FILE
@@ -41,7 +41,7 @@ ZAMG = es.Eventframe(ZAMG_all_stations, resolution='10min', season=[3,11])
 
 
 '''Get wet day and wet hour events in station dataframe'''                  
-# Dayframe = ZAMG.EventDays('ZAMG_MarNov_10mm', wet_day_threshold=1) 
+#Dayframe = ZAMG.EventDays('ZAMG_MarNov_10mm', wet_day_threshold=1) 
 Dayframe = pd.read_pickle(r'I:/DOCUMENTS/WEGC/02_PhD_research/04_Programming/Python/Data_Analysis/Events/ZAMG_MarNov_10mm_wet_day_event_statistics.npy')
 Dayframe.columns.names = ['station', 'indicator']    
 
@@ -239,8 +239,10 @@ Seasons = {'spring':[3,4,5], 'summer':[6,7,8], 'autumn':[9,10,11]}
 times_early = [0,12] # to be plotted on the left panel
 times_late = [12,24] # to be plotted on the right panel
 title = ''
+group_indicator = 'duration'
+figuretitle = 'Hour_events_by_duration_ZAMG10min_MarNov'
 
-fig, [[ax0, ax1], [ax2, ax3], [ax4, ax5]] = plt.subplots(3,2,  figsize=(14, 9))
+fig, [[ax0, ax1], [ax2, ax3], [ax4, ax5]] = plt.subplots(3,2,  figsize=(9, 9))
 fig.suptitle(title, fontsize=12)
 axs=[[ax0, ax1], [ax2, ax3], [ax4, ax5]]
 axs_twin=[[ax0.twinx(), ax1.twinx()], [ax2.twinx(), ax3.twinx()],
@@ -249,8 +251,10 @@ axs_twin=[[ax0.twinx(), ax1.twinx()], [ax2.twinx(), ax3.twinx()],
 colors = ['#ffffff', '#add8e6', '#4169e1', '#ee82ee', '#b03060', '#ff1493']
 scl = [0, 60] # y axis limits precip [mm]
 scl_b = [0, 14000] # twin y axis limits (number of hour events)
-xran = 16 # x axis limits duration of events [h]
+xran = 16 # x axis limits
+xlbl = 'duration [d]' # x label
 yl = '' # ylabel is added via dummy axis axd
+yscalelog = 0 # log scale on the left y axis (mm)
 
 '''HOUR EVENTS BY SEASON AND TIME OF DAY'''
 for season, ax, ax_tw in zip(['spring', 'summer', 'autumn'], axs, axs_twin):
@@ -273,32 +277,32 @@ for season, ax, ax_tw in zip(['spring', 'summer', 'autumn'], axs, axs_twin):
     for el, axy, axy_tw in zip([Hourframe_in_bef, Hourframe_in_aft], ax, ax_tw):  
         
         stk = el.stack('station')
-        sample_by_indicator_a = stk.groupby('duration').quantile(q=.999)
-        sample_by_indicator_b = stk.groupby('duration').quantile(q=.99)
-        sample_by_indicator_c = stk.groupby('duration').quantile(q=.98)
-        sample_by_indicator_d = stk.groupby('duration').max()
+        sample_by_indicator_a = stk.groupby(group_indicator).quantile(q=.999)
+        sample_by_indicator_b = stk.groupby(group_indicator).quantile(q=.99)
+        sample_by_indicator_c = stk.groupby(group_indicator).quantile(q=.98)
+        sample_by_indicator_d = stk.groupby(group_indicator).max()
 
         sample_by_indicator_a[['max hourly', 'peak 1', 'mean rain rate']][0:xran].plot(
                     ax=axy, kind='line', ls='-', linewidth=1.5,
                     color=[colors[1], colors[3], colors[4]],
-                    logy=1, legend=0)
+                    logy=yscalelog, legend=0)
         sample_by_indicator_b[['max hourly', 'peak 1', 'mean rain rate']][0:xran].plot(
                     ax=axy, kind='line', ls='--',
                     color=[colors[1], colors[3], colors[4]],
-                    logy=1, legend=0)
+                    logy=yscalelog, legend=0)
         sample_by_indicator_c[['max hourly', 'peak 1', 'mean rain rate']][0:xran].plot(
                     ax=axy, kind='line', ls=':',
                     color=[colors[1], colors[3], colors[4]],
-                    logy=1, legend=0)
+                    logy=yscalelog, legend=0)
                     
         sample_by_indicator_d[['max hourly', 'peak 1', 'mean rain rate']][0:xran].plot(
                     ax=axy, kind='line', ls='', linewidth=.5,
                     marker='o', markersize=5,
                     color=[colors[1], colors[3], colors[4]],
                     markeredgecolor='white',
-                    logy=0, legend=0)            
+                    logy=yscalelog, legend=0)            
         '''GET TOTAL NUMBER OF EVENTS FOR CLASSES -5, >5-10'''
-        s = stk.duration[stk.duration<xran]
+        s = stk[group_indicator][stk[group_indicator]<xran]
 #        axy2 = axy.twinx()
         axy_tw.hist(s, bins=(range(1, xran+1)), 
                  color='grey', alpha=0.3, histtype='stepfilled', 
@@ -348,18 +352,194 @@ axd.set_xticks([])
 axd.set_yticklabels([])
 axd.set_yticks([])
 #axd.set_ylabel('mm')
-axd.set_xlabel('duration [h]')
-axd.text(.082,.42,'[mm]', rotation=90)
-axd.text(.93,.44,'number of events', rotation=-90, color='grey')
+axd.set_xlabel(xlbl)
+axd.text(.075,.42,'[mm]', rotation=90)
+axd.text(.95,.44,'number of events', rotation=-90, color='grey')
 axd.text(.1,.9,'(a) before noon', fontsize=14)
 axd.text(.52,.9,'(b) after noon', fontsize=14)
+
+fig.savefig(plotpath+'/'+ figuretitle, dpi=300)
+
+
 
 ''' ---------------------------------------------------------------------------
 bring in ZAMG daily Tmax
 -------------------------------------------------------------------------------
 '''
+''' FIGURE '''
+Seasons = {'spring':[3,4,5], 'summer':[6,7,8], 'autumn':[9,10,11]}
+times_early = [0,12] # to be plotted on the left panel
+times_late = [12,24] # to be plotted on the right panel
+title = ''
+group_indicator = 'Tmax_a'
+figuretitle = 'Hour_events_by__ZAMG10min_MarNov'
+
+fig, [[ax0, ax1], [ax2, ax3], [ax4, ax5]] = plt.subplots(3,2,  figsize=(9, 9))
+fig.suptitle(title, fontsize=12)
+axs=[[ax0, ax1], [ax2, ax3], [ax4, ax5]]
+axs_twin=[[ax0.twinx(), ax1.twinx()], [ax2.twinx(), ax3.twinx()],
+           [ax4.twinx(), ax5.twinx()]]
+
+colors = ['#ffffff', '#add8e6', '#4169e1', '#ee82ee', '#b03060', '#ff1493']
+scl = [0, 60] # y axis limits precip [mm]
+scl_b = [0,4500] # twin y axis limits (number of hour events)
+xran = int(np.round(Hourframe.stack('station')[group_indicator].max(), 0)) # x axis limits
+print 'xrange limit: ', xran
+
+xlbl = 'T_max [deg C], day before onset' # x label
+yl = '' # ylabel is added via dummy axis axd
+yscalelog = 0 # log scale on the left y axis (mm)
+
+'''HOUR EVENTS BY SEASON AND TIME OF DAY'''
+for season, ax, ax_tw in zip(['spring', 'summer', 'autumn'], axs, axs_twin):
+    Hourframe_in_bef = Hourframe[np.logical_and(np.logical_or(Hourframe.index.month == Seasons[season][0],
+                                                    Hourframe.index.month == Seasons[season][1],
+                                                    Hourframe.index.month == Seasons[season][2]),
+                                     np.logical_and(Hourframe.index.hour >= times_early[0],
+                                     Hourframe.index.hour < times_early[1]
+                                     ))]
+    Hourframe_in_aft = Hourframe[np.logical_and(np.logical_or(Hourframe.index.month == Seasons[season][0],
+                                                    Hourframe.index.month == Seasons[season][1],
+                                                    Hourframe.index.month == Seasons[season][2]),
+                                     np.logical_and(Hourframe.index.hour >= times_late[0], 
+                                     Hourframe.index.hour < times_late[1]
+                                     ))]   
+    ''' * throw together events of all stations (flatten by station)
+        * group by duration of events --> count (for histogram)
+        * calculate statistical measures (p98, p99, p99.9, max) for each class
+        '''
+    for el, axy, axy_tw in zip([Hourframe_in_bef, Hourframe_in_aft], ax, ax_tw):  
+        '''CODE FOR CLASSES Of 1°C (change y range on the twin y axis for number
+        of events per class'''        
+        stk = el.stack('station')
+        stk.Tmax_z = np.floor(stk.Tmax_z)
+        stk.Tmax_a = np.floor(stk.Tmax_a)
+        sample_by_indicator_a = stk.groupby(group_indicator).quantile(q=.999)
+        sample_by_indicator_b = stk.groupby(group_indicator).quantile(q=.99)
+        sample_by_indicator_c = stk.groupby(group_indicator).quantile(q=.98)
+        sample_by_indicator_d = stk.groupby(group_indicator).max()
+        
+        '''CODE FOR CLASSES Of 5°C (change y range on the twin y axis for number
+        of events per class'''
+#        sample_by_indicator_a = stk.groupby(pd.cut(stk[group_indicator], np.arange(0,45,5))).quantile(q=.999)
+#        sample_by_indicator_a['class_mid'] = [2.5, 7.5, 12.5, 17.5, 22.5, 27.5, 32.5, 37.5]
+#        sample_by_indicator_a.index = sample_by_indicator_a['class_mid']
+#        sample_by_indicator_b = stk.groupby(pd.cut(stk[group_indicator], np.arange(0,45,5))).quantile(q=.99)
+#        sample_by_indicator_b['class_mid'] = [2.5, 7.5, 12.5, 17.5, 22.5, 27.5, 32.5, 37.5]
+#        sample_by_indicator_b.index = sample_by_indicator_b['class_mid']
+#        sample_by_indicator_c = stk.groupby(pd.cut(stk[group_indicator], np.arange(0,45,5))).quantile(q=.98)
+#        sample_by_indicator_c['class_mid'] = [2.5, 7.5, 12.5, 17.5, 22.5, 27.5, 32.5, 37.5]
+#        sample_by_indicator_c.index = sample_by_indicator_c['class_mid']
+#        sample_by_indicator_d = stk.groupby(pd.cut(stk[group_indicator], np.arange(0,45,5))).max() 
+#        sample_by_indicator_d['class_mid'] = [2.5, 7.5, 12.5, 17.5, 22.5, 27.5, 32.5, 37.5]
+#        sample_by_indicator_d.index = sample_by_indicator_d['class_mid']
+
+        '''CODE FOR CLASSES Of 2°C (change y range on the twin y axis for number
+        of events per class'''
+        sample_by_indicator_a = stk.groupby(pd.cut(stk[group_indicator], np.arange(0,40,2))).quantile(q=.999)
+        sample_by_indicator_a['class_mid'] = range(0,38,2)
+        sample_by_indicator_a.index = sample_by_indicator_a['class_mid']
+        sample_by_indicator_b = stk.groupby(pd.cut(stk[group_indicator], np.arange(0,40,2))).quantile(q=.99)
+        sample_by_indicator_b['class_mid'] = range(0,38,2)
+        sample_by_indicator_b.index = sample_by_indicator_b['class_mid']
+        sample_by_indicator_c = stk.groupby(pd.cut(stk[group_indicator], np.arange(0,40,2))).quantile(q=.98)
+        sample_by_indicator_c['class_mid'] = range(0,38,2)
+        sample_by_indicator_c.index = sample_by_indicator_c['class_mid']
+        sample_by_indicator_d = stk.groupby(pd.cut(stk[group_indicator], np.arange(0,40,2))).max() 
+        sample_by_indicator_d['class_mid'] = range(0,38,2)
+        sample_by_indicator_d.index = sample_by_indicator_d['class_mid']
 
 
+        sample_by_indicator_a[['max hourly', 'peak 1', 'mean rain rate']][0:xran].plot(
+                    ax=axy, kind='line', ls='-', linewidth=1.5,
+                    color=[colors[1], colors[3], colors[4]],
+                    logy=yscalelog, legend=0)
+        sample_by_indicator_b[['max hourly', 'peak 1', 'mean rain rate']][0:xran].plot(
+                    ax=axy, kind='line', ls='--',
+                    color=[colors[1], colors[3], colors[4]],
+                    logy=yscalelog, legend=0)
+        sample_by_indicator_c[['max hourly', 'peak 1', 'mean rain rate']][0:xran].plot(
+                    ax=axy, kind='line', ls=':',
+                    color=[colors[1], colors[3], colors[4]],
+                    logy=yscalelog, legend=0)
+                    
+        sample_by_indicator_d[['max hourly', 'peak 1', 'mean rain rate']][0:xran].plot(
+                    ax=axy, kind='line', ls='', linewidth=.5,
+                    marker='o', markersize=5,
+                    color=[colors[1], colors[3], colors[4]],
+                    markeredgecolor='white',
+                    logy=yscalelog, legend=0)            
+        '''GET TOTAL NUMBER OF EVENTS FOR CLASSES -5, >5-10'''
+        s = stk[group_indicator][stk[group_indicator]<xran]
+#        axy2 = axy.twinx()
+        axy_tw.hist(s, 
+#                    bins = np.arange(0,45,5), # classes of 5
+#                    bins=(range(1, xran+1)), # classes of 1
+                    bins = np.arange(0,38,2), # classes of 2
+                    color='grey', 
+                    alpha=0.3, 
+                    histtype='stepfilled', 
+                    align='mid',
+                    normed=0)
+        axy_tw.set_ylim(scl_b)
+        
+        axy.set_title('')
+#        axy.grid(which='minor')
+        axy.grid(which='major', linestyle='', linewidth=.2, alpha=.8)
+        axy.grid(which='minor', linestyle='-', linewidth=.2, alpha=.8)
+        axy.xaxis.grid(False)
+        axy_tw.grid('off')
+        axy.set_ylim(scl)
+        axy.set_ylabel(yl, fontsize=9) 
+        axy.set_xlabel('', fontsize=8)         
 
+ax0.set_ylabel('MAM', fontsize=14, fontweight='bold', rotation=0) 
+ax2.set_ylabel('JJA', fontsize=14, fontweight='bold', rotation=0)   
+ax4.set_ylabel('SON', fontsize=14, fontweight='bold', rotation=0)  
 
+for axx in [ax0, ax2, ax4]:
+    axx.set_xlim([0,40])  
+    axx.yaxis.set_label_coords(-.2,.5)
+
+for axx in [ax2, ax3]:
+    axx.set_xlim([0,40])     
+    axx.set_xticklabels([])
+
+for axx in [ax0, ax1]: 
+    axx.set_xlim([0,40])      
+    axx.xaxis.tick_top()    
+#for axx in [ax1, ax3, ax5]:     
+#    axx.yaxis.tick_right()   
+
+for axx in [ax1, ax3, ax5]:   
+    axx.set_xlim([0,40])  
+    axx.set_yticklabels([])    
+
+for axx in [axs_twin[0][0], axs_twin[1][0], axs_twin[2][0]]: 
+    axx.set_yticks(np.arange(0,scl_b[1],500)) 
+    axx.set_yticklabels([], color='grey')  
+    
+for axx in [axs_twin[0][1], axs_twin[1][1], axs_twin[2][1]]: 
+    axx.set_yticks(np.arange(0,scl_b[1],500))    
+#    axx.set_yticklabels(['','','', '2000','', '', '', '4000', '', '', '',
+#                         '6000', '', '', '', '8000',  '', '', '', ''], color='grey')     # classes of 5
+#    axx.set_yticklabels(['','1000','', '2000',''], color='grey') # classes of 1
+    axx.set_yticklabels(['','1000','','2000','','3000','','4000',''], color='grey') # classes of 2
+    
+axd = fig.add_axes([0.01, 0.1, .99, .99], frameon=0)
+axd.patch.set_visible(False)
+axd.yaxis.set_visible(False)
+#axd.xaxis.set_visible(False)
+axd.set_xticklabels([])
+axd.set_xticks([])
+axd.set_yticklabels([])
+axd.set_yticks([])
+#axd.set_ylabel('mm')
+axd.set_xlabel(xlbl)
+axd.text(.075,.42,'[mm]', rotation=90)
+axd.text(.95,.44,'number of events', rotation=-90, color='grey')
+axd.text(.1,.9,'(a) onset before noon', fontsize=14)
+axd.text(.52,.9,'(b) onset after noon', fontsize=14)
+
+fig.savefig(plotpath+'/'+ figuretitle, dpi=300)
 
