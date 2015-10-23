@@ -437,16 +437,16 @@ for season, ax, ax_tw in zip(['spring', 'summer', 'autumn'], axs, axs_twin):
         '''CODE FOR CLASSES Of 2°C (change y range on the twin y axis for number
         of events per class'''
         sample_by_indicator_a = stk.groupby(pd.cut(stk[group_indicator], np.arange(0,40,2))).quantile(q=.999)
-        sample_by_indicator_a['class_mid'] = range(0,38,2)
+        sample_by_indicator_a['class_mid'] = range(1,39,2)
         sample_by_indicator_a.index = sample_by_indicator_a['class_mid']
         sample_by_indicator_b = stk.groupby(pd.cut(stk[group_indicator], np.arange(0,40,2))).quantile(q=.99)
-        sample_by_indicator_b['class_mid'] = range(0,38,2)
+        sample_by_indicator_b['class_mid'] = range(1,39,2)
         sample_by_indicator_b.index = sample_by_indicator_b['class_mid']
         sample_by_indicator_c = stk.groupby(pd.cut(stk[group_indicator], np.arange(0,40,2))).quantile(q=.98)
-        sample_by_indicator_c['class_mid'] = range(0,38,2)
+        sample_by_indicator_c['class_mid'] = range(1,39,2)
         sample_by_indicator_c.index = sample_by_indicator_c['class_mid']
         sample_by_indicator_d = stk.groupby(pd.cut(stk[group_indicator], np.arange(0,40,2))).max() 
-        sample_by_indicator_d['class_mid'] = range(0,38,2)
+        sample_by_indicator_d['class_mid'] = range(1,39,2)
         sample_by_indicator_d.index = sample_by_indicator_d['class_mid']
 
 
@@ -454,6 +454,8 @@ for season, ax, ax_tw in zip(['spring', 'summer', 'autumn'], axs, axs_twin):
                     ax=axy, kind='line', ls='-', linewidth=1.5,
                     color=[colors[1], colors[3], colors[4]],
                     logy=yscalelog, legend=0)
+        
+        
         sample_by_indicator_b[['max hourly', 'peak 1', 'mean rain rate']][0:xran].plot(
                     ax=axy, kind='line', ls='--',
                     color=[colors[1], colors[3], colors[4]],
@@ -469,13 +471,27 @@ for season, ax, ax_tw in zip(['spring', 'summer', 'autumn'], axs, axs_twin):
                     color=[colors[1], colors[3], colors[4]],
                     markeredgecolor='white',
                     logy=yscalelog, legend=0)            
+        
+        '''TREND LINES
+        '''            
+        x = sample_by_indicator_a['Tmax_z']            
+        y = sample_by_indicator_a['peak 1'] 
+        x = x[np.isfinite(x)]
+        y = y[np.isfinite(y)]
+        # calc the trendline
+        z = np.polyfit(x, y, 1)
+        p = np.poly1d(z)
+        axy.plot(x,p(x),'b-')
+        # the line equation:
+        print 'y=%.6fx+(%.6f)'%(z[0],z[1])
+                  
         '''GET TOTAL NUMBER OF EVENTS FOR CLASSES -5, >5-10'''
         s = stk[group_indicator][stk[group_indicator]<xran]
 #        axy2 = axy.twinx()
         axy_tw.hist(s, 
 #                    bins = np.arange(0,45,5), # classes of 5
 #                    bins=(range(1, xran+1)), # classes of 1
-                    bins = np.arange(0,38,2), # classes of 2
+                    bins = np.arange(1,39,2), # classes of 2
                     color='grey', 
                     alpha=0.3, 
                     histtype='stepfilled', 
@@ -543,3 +559,12 @@ axd.text(.52,.9,'(b) onset after noon', fontsize=14)
 
 fig.savefig(plotpath+'/'+ figuretitle, dpi=300)
 
+
+
+x = [1, 2, 3, 4, 5]
+y = [y1, y1+0.07*y1, ]
+
+sss = np.array([i+.07*i for i in xrange(1,10)])
+
+while i in y < 100:
+    i+1 = i+007*i
