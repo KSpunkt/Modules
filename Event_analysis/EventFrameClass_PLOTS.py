@@ -3,6 +3,15 @@
 Created on Tue Jul 28 12:04:11 2015
 
 @author: Kaddabadda
+
+PLOTS FOR EventFrameClass Objects
+
+* 28.10.2015: for ZAMG Version only (ZAMG tag sybase table)
+
+* before plotting, establish an EventFrame Object, load or calculate 
+  the Dayframe and Hourframe of the respective Events. Based on the groupings, 
+  plots are made and saved
+
 """
 import numpy as np
 import pandas as pd
@@ -49,7 +58,7 @@ Dayframe.columns.names = ['station', 'indicator']
 Hourframe = pd.read_pickle(r'I:/DOCUMENTS/WEGC/02_PhD_research/04_Programming/Python/Data_Analysis/Events/ZAMG_MarNov_Days10mm_wet_hour_event_statistics.npy')
 Hourframe.columns.names = ['station', 'indicator']
 
-Rankframe = es.RSS(Dayframe)
+#Rankframe = es.RSS(Dayframe)
 
 '''----------------------------------------------------------------------------
 #### ----------- 

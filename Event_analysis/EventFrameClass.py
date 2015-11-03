@@ -3,13 +3,27 @@
 Created on Thu Mar 26 15:19:03 2015
 edited 2015 07 13
 @author: Kaddabadda
+
+-------------------------------------------------------------------------------
+CLASS EVENTFRAMES
+-------------------------------------------------------------------------------
+Methods to analyse observed station net datasets and identify extremes
+
+* resample function with NaN option
+* Eventframes with methods:
+  - get_percentiles
+  - desription_tofile
+  - singlerecords_over_thres
+  - EventDays
+  - EventHours
+
+
 """
 import numpy as np
 import pandas as pd
 import csv
 import matplotlib.pyplot as plt
 from itertools import izip
-
 
 
 def resample_valid(df, res, valid, **kwargs):    
@@ -93,6 +107,7 @@ class Eventframe:
         self.season = season
         self.valid = valid
         
+        '''KADDABADDA-PC PATHS'''
         ZAMG_daily_Tmax = pd.read_pickle(r'I:\DOCUMENTS\WEGC\02_PhD_research\03_Data\ZAMG\processed_data\DAILY\ZAMG_daily_Tmax_1992-2004.npy')
         self.ZAMG_tag = ZAMG_daily_Tmax
         
@@ -100,6 +115,17 @@ class Eventframe:
         self.path2 = r'I:\DOCUMENTS\WEGC\02_PhD_research\04_Programming\Python\Data_Analysis\Events'
         self.path3 = r'I:\DOCUMENTS\WEGC\02_PhD_research\04_Programming\Python\Data_Analysis\Description'
         self.path4 = r'I:\DOCUMENTS\WEGC\02_PhD_research\04_Programming\Python\Data_Analysis\Description\Plots'
+        
+        '''WEGC LINUX PATHS'''
+        ZAMG_daily_Tmax = pd.read_pickle(r'\data\arsclisys\acu\ksc\WEGC\02_PhD_research\03_Data\ZAMG\processed_data\DAILY\ZAMG_daily_Tmax_1992-2004.npy')
+        self.ZAMG_tag = ZAMG_daily_Tmax
+        
+        self.path1 = r'\data\arsclisys\acu\ksc\WEGC\02_PhD_research\04_Programming\Python\Data_Analysis'
+        self.path2 = r'\data\arsclisys\acu\ksc\WEGC\02_PhD_research\04_Programming\Python\Data_Analysis\Events'
+        self.path3 = r'\data\arsclisys\acu\ksc\WEGC\02_PhD_research\04_Programming\Python\Data_Analysis\Description'
+        self.path4 = r'\data\arsclisys\acu\ksc\WEGC\02_PhD_research\04_Programming\Python\Data_Analysis\Description\Plots'
+        
+        
         
         month = dataframe.index.month
         selector = ((season[0] <= month) & (month <= season[1]))
@@ -420,7 +446,7 @@ class Eventframe:
         df_daily[df_daily < wet_day_threshold] = 0  
         df_daily[df_daily >= wet_day_threshold] = 1
         
-        print df_daily.head()
+#        print df_daily.head()
         # preallocate list where Event ID data will be stored
         #listall = [0] * len(df_daily.columns.values)
         #list_stats = [0] * len(df_daily.columns.values)
