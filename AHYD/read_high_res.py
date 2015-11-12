@@ -22,6 +22,7 @@ AHYD HIGH RESOLUTION PRECIPITATION OBSERVATIONS
   too large to be easily processed further.
 """
 import pandas as pd
+import numpy as np
 
 pout = r'I:\DOCUMENTS\WEGC\02_PhD_research\03_Data\AHYD\High_resolution\edited_for_processing'
 p = r'I:\DOCUMENTS\WEGC\02_PhD_research\03_Data\AHYD\High_resolution'
@@ -524,11 +525,43 @@ other stations being fillep up to that with NaNs
 * Process each station series and identify events
 * extract highest events (p95) and continue working with that
 '''
+import pandas as pd
+pout =u'/data/arsclisys/acu/ksc/'
+
+decades = [['61-69', [1961, 1969]],
+           ['70-79', [1970, 1979]],
+           ['80-89', [1980, 1989]],
+           ['90-99', [1990, 1999]],
+           ['00-11', [2000, 2011]],
+           ['12-14', [2012, 2014]]]
+
+decades = [['00-11', [2000, 2011]],
+           ['12-14', [2012, 2014]]]
 
 
+AHYD_hires_SEA = pd.read_pickle(pout+ '/AHYD_hires_SEA_all.npy')
 
+for i, decade in enumerate(decades):
+    print 'process decade', decade[0]
+    selector = np.logical_and(AHYD_hires_SEA.index.year >= decade[1][0], AHYD_hires_SEA.index.year <= decade[1][1])
+    AHYD_hires_SEA[selector].to_pickle(pout + '\AHYD_highres_' + decade[0] + '.npy')
 
+selector = np.logical_and(AHYD_hires_SEA.index.year >= 2012, AHYD_hires_SEA.index.year <= 2014)
+AHYD_hires_SEA[selector].to_pickle(pout + '\AHYD_highres_12-14.npy')    
 
+selector = np.logical_and(AHYD_hires_SEA.index.year >= 2000, AHYD_hires_SEA.index.year <= 2005)
+AHYD_hires_SEA[selector].to_pickle(pout + '\AHYD_highres_00-05.npy')    
+
+selector = np.logical_and(AHYD_hires_SEA.index.year >= 2006, AHYD_hires_SEA.index.year <= 2011)
+AHYD_hires_SEA[selector].to_pickle(pout + '\AHYD_highres_06-11.npy')    
+
+''' save station time series'''
+pout =u'/data/arsclisys/acu/ksc/AHYDStationSeries'
+AHYD_hires_SEA.columns =  AHYD_hires_SEA.columns.get_level_values(0)
+for column in AHYD_hires_SEA:
+    print 'processing station', column
+    stationseries = AHYD_hires_SEA[column]
+    stationseries.to_pickle(pout + '/AHYD_HR_station_' + column + '.npy')
 
 
 

@@ -90,4 +90,18 @@ for eachStation in stationlist['statnr']:
 ZAMG_daily_Tmax = pd.concat(emptylist, axis=1)
 ZAMG_daily_Tmax.to_pickle(r'I:\DOCUMENTS\WEGC\02_PhD_research\03_Data\ZAMG\processed_data\DAILY\ZAMG_daily_Tmax_1992-2004.npy')
 
-           
+''' ---------------------------------------------------------------------------
+WRITE ZAMG 10min to single station files (09.11.2015)
+-------------------------------------------------------------------------------
+'''          
+p = r'I:\DOCUMENTS\WEGC\02_PhD_research\03_Data\ZAMG\processed_data\Station_Dataframes'
+f = r'\ZAMG_10min_allyear.npy'
+
+ZAMG_all = pd.read_pickle(p+f)
+
+for column in ZAMG_all.columns:
+    print column
+    stationseries = ZAMG_all[column]
+    stationseries.to_pickle(p+'\ZAMGStationSeries\ZAMG_HR_' + column + '.npy')
+   
+
