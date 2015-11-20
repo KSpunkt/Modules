@@ -30,13 +30,6 @@ Methods to analyse observed station net datasets and identify extremes
 import numpy as np
 import pandas as pd
 
-ZAMG_p  = r'I:\DOCUMENTS\WEGC\02_PhD_research\03_Data\ZAMG\processed_data\Station_Dataframes\ZAMGStationSeries'
-f = r'\ZAMG_HR_11148.npy'
-AHYD_p = r'I:\DOCUMENTS\WEGC\02_PhD_research\03_Data\AHYD\High_resolution\edited_for_processing\AHYDStationSeries'
-
-
-testin = pd.read_pickle(ZAMG_p + f)
-testin = testin['2008':'2010']
 
 def resample_valid(df, res, valid=0, **kwargs):    
     ''' 
@@ -314,9 +307,8 @@ class Eventframe:
                         startday = Series.index[t]
                         startday_dict.update({count : startday})
                         ##print 'wet day after dry or no value day! Event counter: ', count
-        print count, ' events in station record', 'len array event', len(array_event)
-        if count == 0:
-            print 'no events in record'
+        print count, ' events in station record'
+
             
         '''for each station record add the event ID column, which attributes a
         number to events of consecutive wet days if at least one zero or NaN
@@ -338,7 +330,7 @@ class Eventframe:
         if stats.firstday.empty:
             stats1 = pd.DataFrame(columns=['peak 1', 'peak 2', 'peak 3',
                                            'perc nan', 'max h 1', 'max h 2', 
-                                           'Tmax_z', 'Tmax_a'])
+                                           'Tmax_b', 'Tmax_a'])
             stats = pd.concat([stats, stats1], axis=1)
             
         else:
@@ -363,13 +355,13 @@ class Eventframe:
                 
                 perc_nan = (1-(np.float(ScanInterval.count())/np.float(len(ScanInterval))))*100               
                 stats.loc[stats.firstday[i], 'perc nan'] = perc_nan
-               
+                ''' get max hour sum'''
                 mh = ScanInterval.resample('1H', how='sum').order(ascending=False)[0:3]              
                 stats.loc[stats.firstday[i], 'max h 1'] = mh.values[0]
                 stats.loc[stats.firstday[i], 'max h 2'] = mh.values[1]
                 '''add ZAMG Tmax of the onset day and the day prior to onset day'''
-#                stats.loc[stats.firstday[i], 'Tmax_z'] = self.ZAMG_tag[station].loc[stats.firstday[i]]
-                stats.loc[stats.firstday[i], 'Tmax_z'] = self.sparta[int(self.station)].loc[stats.firstday[i]]
+#                stats.loc[stats.firstday[i], 'Tmax_b'] = self.ZAMG_tag[station].loc[stats.firstday[i]]
+                stats.loc[stats.firstday[i], 'Tmax_b'] = self.sparta[int(self.station)].loc[stats.firstday[i]]
                 # print 'stats.firstday[i]: ', stats.firstday[i]
                 '''get location of Tmax preceding the onset day'''
 #                loc_prec = (self.ZAMG_tag[station].index.get_loc(stats.firstday[i]))-1
@@ -383,7 +375,7 @@ class Eventframe:
         return stats
       
 
-    def EventHours(self, Dayframe, outfile, valid=0):
+    def EventHours(self, Dayframe, outfile, wet_hour_threshold=.2, valid=0):
         ''' 
         METHOD:
         * Within the wet day events look for hourly resolved events
@@ -394,6 +386,8 @@ class Eventframe:
         * pd.DataFrame of wet days (all days with values will be scanned)
         * valid: number of required valid records in building hourly sums
           e.g., 10min data: 5 would mean 5/6; 5min data: 5 would mean 5/12
+        * wet_hour_threshold: only hourly sums equal and greater will be
+          considered
         -----------------------------------------------------------------------
         OUTPUT:
         * DataFrame with Events per station: 
@@ -404,284 +398,250 @@ class Eventframe:
         * - peaks [mm/10 or 5min]
         -----------------------------------------------------------------------
         '''
-        # yields for each day the longest duration (max()) of all stations
-        
-        # (works 2015-08-04):
-        # Dayframe.iloc[:, Dayframe.columns.get_level_values(1)=='duration'].max(axis=1) 
-        # yields the same: (works 2015-08-04):
-        dur = Dayframe.xs('duration', level=1, axis=1).max(axis=1)   
-        
-        # ScanFrame: Dataframe of all wet days as found in EventDays
+        ''' ScanFrame: Dataframe of all wet days as found in EventDays '''
         ScanFrameList = []
-        for day, dur in zip(dur.index, dur.values):
-                   
-            # make scan range +1 so that last rec of scanning is the midnight 
-            # observaiton of the following day
-            scan_rng = pd.date_range(day, periods=dur+1, freq='D')
-            ScanInterval = self.rawinputdata.ix[scan_rng[0]:scan_rng[-1]]
-#            ScanInterval = rawinputdata.ix[scan_rng[0]:scan_rng[-1]]
-            ScanFrameList.append(ScanInterval)
-        ScanFrame = pd.concat(ScanFrameList)
-        print 'TEST 1 ScanFrame index duplicated?!: \n', ScanFrame.index.is_unique 
-        idx = np.unique(ScanFrame.index, return_index=True)[1]
-        ScanFrame = ScanFrame.iloc[idx]
-        print 'TEST 2 ScanFrame index duplicated?!: \n', ScanFrame.index.is_unique  
+        ''' timedelta to start hour event scan one day before the first wet day.
+        This way, onset on the previous day is not ruled out'''
+        from datetime import timedelta
+        one_day = timedelta(days=1)
         
-        # resample the frame to get hourly sums
+        for day, dur in zip(Dayframe.index, Dayframe.duration):
+            ''' scan all wet days +- 1 for wet hours'''
+            '''take the onset days and duration from day events'''
+            scan_rng = pd.date_range(day-one_day, periods=dur+1, freq='D')
+            ''' cut out the data from the original data'''
+            ScanInterval = self.rawinputdata.ix[scan_rng[0]:scan_rng[-1]]
+            ScanFrameList.append(ScanInterval)
+        '''put all original wet day observations in one frame'''    
+        ScanFrame = pd.concat(ScanFrameList)
+        '''test whether a day has entered the scan frame twice and correct'''
+        print 'TEST for duplicates in index...'
+        if ScanFrame.index.is_unique is True:
+            print 'no duplicates in index'
+            pass
+        else:
+            idx = np.unique(ScanFrame.index, return_index=True)[1]
+            ScanFrame = ScanFrame.iloc[idx]
+            print 'TEST 2 ScanFrame index duplicated?!: \n', ScanFrame.index.is_unique  
+        '''resample the frame to get hourly sums'''
         df_hourly = resample_valid(ScanFrame, '1H', valid=valid)
         df_values = resample_valid(ScanFrame, '1H', valid=valid)
-        
-        # assign dry (0) and wet hours (1) 
-        df_hourly[df_hourly < .2] = 0 
-        df_hourly[df_hourly >= .2] = 1
-        
-       
-
-        # preallocate dict where Event ID data will be stored
-        Stats_Hourly_Dict = {}
-        
-        # loop through all stations in the dataset
-        for [loop, station] in enumerate(df_hourly.columns.values):
-            print 'station processed :', station
-            # treat each station as series
-            Series = df_hourly[station]
-
-            count = 0
-            array_event = []
-            # preallocate dict where the start time for each event is stored
-            starthour_dict = {}
-            
-            # loop through observations in each station series
-            for [t, x] in enumerate(Series):
-                # print 'step: ', t, ' value: ', x
-                # if first observation is positive don't check for preceding hr
-                # assign event ID '1'
-                if np.logical_and(t==0, x==1):
-                    count = count+1
-                    array_event.append(count)
-                    starthour = Series.index[t]
-                    starthour_dict.update({count : starthour})
-                    #print 'first hour in record is wet! Event counter: ', count
-                # if first observation is NaN, assign NaN
-                elif np.logical_and(t==0, pd.isnull(Series[t])):
-                        array_event.append(np.nan)            
-                        #print 'first hour missing value! Event counter: ', count
-                        
-                # if observation is either 1 or 0:
-                else:
-                    # if hour is dry (='0') assign NaN for dry hours
-                    if x==0:
-                        array_event.append(np.nan)
-                        # print 'dry hour', 'event counter: ', count
-                    elif np.isnan(x):
-                        array_event.append(np.nan)
-                        # print 'no value hour', 'event counter: ', count
-                    # assign an event ID for wet hour. Consecutive wet hour get the
-                    # same ID
-                    else:
-                        # assign the same event ID for consecutive wet hours
-                        if Series[t-1] == 1:
-                            array_event.append(count)
-                            # print 'consecutive wet hour! Event counter: ', count
-                        # assign new event ID if a dry hour preceded the wet hour
-                        else:
-                            count = count+1
-                            array_event.append(count)
-                            # save the date of the first hour of event
-                            starthour = Series.index[t]
-                            starthour_dict.update({count : starthour})
-                            # print 'wet hour after dry or no value hour! Event counter: ', count
-            print count, 'events detected'
-
-            
-            '''for each station record add the event ID column, which attributes a
-            number to events of consecutive wet hours if at least one zero or NaN
-            hour is in between
-            '''
-            df = pd.DataFrame({station: df_values[station],
-                               station + '_eventID': array_event})
-            
-            # group by Events from 1 to x
-            byEvent = df.groupby(station + '_eventID')
-            # sum, average, max of observation within event
-            stats = byEvent.agg([np.nansum, np.nanmean, len, max])
-            
-                      
-            stats.columns = stats.columns.get_level_values(1).drop_duplicates()         
-            stats.columns = ['sum', 'mean rain rate', 'duration', 'max hourly']
-
-            # add column to dataframe: date of the first wet hour and use ans index
-            stats['firsthour'] =  starthour_dict.values()       
-            stats.index = stats.firsthour
-            
-            # if no event in Station, add nans instead of peaks
-            if stats.firsthour.empty:
-                stats1 = pd.DataFrame(columns=['peak 1', 'peak 2', 'peak 3',
-                                               'perc nan', 'Tmax_z', 'Tmax_a'])
-                stats = pd.concat([stats, stats1], axis=1)
+        '''assign dry (0) and wet hours (1) '''
+        df_hourly[df_hourly < wet_hour_threshold] = 0 
+        df_hourly[df_hourly >= wet_hour_threshold] = 1
+        count = 0
+        array_event = []
+        ''' preallocate dict where the start time for each event is stored'''
+        starthour_dict = {}
+        # loop through observations in station series
+        for t, x in enumerate(df_hourly):
+#            print 'step: ', t, ' value: ', x
+            if np.logical_and(t==0, x==1):
+                '''if first observation is positive don't check for preceding hr
+                assign event ID'''
+                count = count+1
+                array_event.append(count)
+                starthour = df_hourly.index[t]
+                starthour_dict.update({count : starthour})
+#                print 'first hour in record is wet! Event counter: ', count
+                ''' if first observation is NaN, assign NaN'''
+            elif np.logical_and(t==0, pd.isnull(df_hourly[t])):
+                    array_event.append(np.nan)            
+#                    print 'first hour missing value! Event counter: ', count  
+                    ''' if observation is either 1 or 0:'''
             else:
-                ''' 
-                For each event in station record, use ORIGINAL DATAFRAME TO
-                * calculate percentage of NaN during event
-                * exctract peak intensities
-                '''
-                
-                for [i, eachFirstHour], dur in zip(enumerate(stats.firsthour), stats.duration):
-                    # make scan range +1 so that last rec of scanning is the first 
-                    # observation of the following hour
-                    scan_rng = pd.date_range(eachFirstHour, periods=dur+1, freq='H')
-                    # get original raw data for the event span
-                    ScanInterval = self.rawinputdata[station].ix[scan_rng[0]:scan_rng[-1]]
-         
-                    peaks = ScanInterval.order(ascending=False)[0:3]
-                               
-                    stats.loc[stats.firsthour[i], 'peak 1'] = peaks.values[0]
-                    stats.loc[stats.firsthour[i], 'peak 2'] = peaks.values[1]
-                    stats.loc[stats.firsthour[i], 'peak 3'] = peaks.values[2]
-                    
-                    perc_nan = (1-(np.float(ScanInterval.count())/np.float(len(ScanInterval))))*100               
-                    stats.loc[stats.firsthour[i], 'perc nan'] = perc_nan
-                    
-                    # add ZAMG Tmax of the onset day and the day prior to onset day
-                    # only use day, reset onset hour to 00:00:00
-                    day = pd.DatetimeIndex([stats.firsthour[i]]).normalize()[0]
-                   # print 'day:  ', day
-                    stats.loc[stats.firsthour[i], 'Tmax_z'] = self.ZAMG_tag[station].loc[day]
-                    #get location of Tmax preceding the onset day
-                    loc_prec = (self.ZAMG_tag[station].index.get_loc(day))-1
-                   # print 'loc_prec:', loc_prec, 'type: ', type(loc_prec)
-                    stats.loc[stats.firsthour[i], 'Tmax_a'] = self.ZAMG_tag[station][loc_prec]
-                    ''' # add ZAMG Tmax of the onset day and the day prior to onset day
-                    stats.loc[stats.firstday[i], 'Tmax_z'] = self.ZAMG_tag[station].loc[stats.firstday[i]]
-                    print 'stats.firstday[i]: ', stats.firstday[i]
-                    #get location of Tmax preceding the onset day
-                    loc_prec = (self.ZAMG_tag[station].index.get_loc(stats.firstday[i]))-1
-                    stats.loc[stats.firstday[i], 'Tmax_a'] = self.ZAMG_tag[station][loc_prec]'''   
-   
-   
-   
-   
-                    #------------------------------------------------------------------
-            del stats['firsthour']
-            #print 'stats head\n\n', stats.head(20)
-            Stats_Hourly_Dict.update({station: stats}) 
-        
-        #hourEventStatistics_all = pd.concat(list_stats, axis=1)
-        
-        hourStatistics_DataFrame = pd.concat(Stats_Hourly_Dict, axis=1)       
-        hourStatistics_DataFrame.to_pickle(self.path2 + '/'+ outfile + '_wet_hour_event_statistics.npy')
-        # save the dataframe of all stations and event IDs
-        #DF_all = pd.concat(listall, axis=1)
-        #DF_all.to_pickle(self.path2 + '/'+ outfile + '_wet_hour_events.npy')
-        print 'Dataframe of Hour Event Statistics saved to /', outfile, '_wet_hour_event_statistics.npy'       
-        
-        return hourStatistics_DataFrame
-
-def RSS(Dayframe):
-    ''' 
-    METHOD:
-    * calculate ranked skill score of events in IndicatorFrame
-    * rank each event based on indicators I(1)-I(n)
-    * RSS(E) = sum of all ranks
-    -----------------------------------------------------------------------
-    INPUT:
-    * Dataframe of event statistics (hourly or daily?)
-    -----------------------------------------------------------------------
-    OUTPUT:
-    * table of individual ranks
-    * list of RSS
-    -----------------------------------------------------------------------
-    '''
-    
-    ''' Each indicator of each station is ranked from 1-N (stationwise)
-    for more than one value of the same size, they get the same rank, but the
-    following gets the rank according to its position, not value. So if two
-    max values are the same, the second highest value is the third highest
-    observation and ranked '3'.
-    '''
-    rankdict = {}
-    # ranks from high to low (highest gets '1', lowest 'N')
-    rank_cols_hi = ['max daily', 'peak 1', 'peak 2', 'mean rain rate',
-                    'max h 1']
-    # ranks from low to high (lowest gets '1', highest 'N')
-    rank_cols_lo = ['duration', 'perc nan']
-                 
-    for col in rank_cols_hi:         
-        ranks = Dayframe.xs(col, level=1, axis=1).rank(method='min',
-                                                        na_option='keep',
-                                                        ascending=0)
-        rankdict.update({col: ranks})   
-                                             
-    for col in rank_cols_lo:        
-        ranks = Dayframe.xs(col, level=1, axis=1).rank(method='min',
-                                                        na_option='keep',
-                                                        ascending=1)        
-        rankdict.update({col: ranks})   
-        rankframe = pd.concat(rankdict, axis=1)
-    
-    
-    ''' Ranked Skill Score Dataframe:
-    '''
-    RSS_dict = {}
-    norm = len(rankframe.columns.get_level_values(0).drop_duplicates())
-    for station in Dayframe.columns.get_level_values(0).drop_duplicates():
-        RSS = (rankframe.xs(station, level=1, axis=1).sum(axis=1)/norm).rank(method='min',
-                                                                    na_option='keep',
-                                                                    ascending=1)
-        RSS_dict.update({station: RSS})
-        RSS_frame = pd.concat(RSS_dict, axis=1)
-   
-    return RSS_frame    
+                # if hour is dry (='0') assign NaN for dry hours
+                if x==0:
+                    array_event.append(np.nan)
+#                    print 'dry hour', 'event counter: ', count
+                elif np.isnan(x):
+                    array_event.append(np.nan)
+#                    print 'no value hour', 'event counter: ', count
+                # assign an event ID for wet hour. Consecutive wet hour get the
+                # same ID
+                else:
+                    # assign the same event ID for consecutive wet hours
+                    if df_hourly[t-1] == 1:
+                        array_event.append(count)
+#                        print 'consecutive wet hour! Event counter: ', count
+                    # assign new event ID if a dry hour preceded the wet hour
+                    else:
+                        count = count+1
+                        array_event.append(count)
+                        # save the date of the first hour of event
+                        starthour = df_hourly.index[t]
+                        starthour_dict.update({count : starthour})
+#                        print 'wet hour after dry or no value hour! Event counter: ', count
+        print count, 'events detected'
+        '''for each station record add the event ID column, which attributes a
+        number to events of consecutive wet hours if at least one zero or NaN
+        hour is in between
+        '''
+        df = pd.DataFrame({self.station: df_values,
+                           self.station + '_eventID': array_event})
+        # group by Events from 1 to x
+        byEvent = df.groupby(self.station + '_eventID')
+        # sum, average, max of observation within event
+        stats = byEvent.agg([np.nansum, np.nanmean, len, max])                             
+        stats.columns = stats.columns.get_level_values(1).drop_duplicates()         
+        stats.columns = ['sum', 'mean rain rate', 'duration', 'max hourly']
+        ''' add column to dataframe: date of the first wet hour and
+            use as index'''
+        stats['firsthour'] =  starthour_dict.values()       
+        stats.index = stats.firsthour       
+        # if no event in df_hourly Series, add nans instead of values
+        if stats.firsthour.empty:
+            stats1 = pd.DataFrame(columns=['peak 1', 'peak 2', 'peak 3',
+                                           'perc nan', 'Tmax_b', 'Tmax_a'])
+            stats = pd.concat([stats, stats1], axis=1)
+        else:
+            ''' 
+            For each event in station record, use ORIGINAL DATAFRAME TO
+            * calculate percentage of NaN during event
+            * exctract peak intensities
+            '''
+            
+            for [i, eachFirstHour], dur in zip(enumerate(stats.firsthour), stats.duration):
+                # make scan range +1 so that last rec of scanning is the first 
+                # observation of the following hour
+                scan_rng = pd.date_range(eachFirstHour, periods=dur+1, freq='H')
+                # get original raw data for the event span
+                ScanInterval = self.rawinputdata.ix[scan_rng[0]:scan_rng[-1]]
      
-        
-def flagging(self):
-    ''' 
-    METHOD:
-    flag potential errors and threshold events?
-    -----------------------------------------------------------------------
-    INPUT:
-    -----------------------------------------------------------------------
-    OUTPUT:
-    -----------------------------------------------------------------------
-    '''
-    
-        
-        
-    '''
-    does the peak intensity time vary from year to year?
+                peaks = ScanInterval.order(ascending=False)[0:3]
+                           
+                stats.loc[stats.firsthour[i], 'peak 1'] = peaks.values[0]
+                stats.loc[stats.firsthour[i], 'peak 2'] = peaks.values[1]
+                stats.loc[stats.firsthour[i], 'peak 3'] = peaks.values[2]
+                
+                perc_nan = (1-(np.float(ScanInterval.count())/np.float(len(ScanInterval))))*100               
+                stats.loc[stats.firsthour[i], 'perc nan'] = perc_nan
+                
+                # add ZAMG Tmax of the onset day and the day prior to onset day
+                # only use day, reset onset hour to 00:00:00
+                day = pd.DatetimeIndex([stats.firsthour[i]]).normalize()[0]
+               # print 'day:  ', day
+                stats.loc[stats.firsthour[i], 'Tmax_b'] = self.sparta[int(self.station)].loc[day]
+                #get location of Tmax preceding the onset day
+                loc_prec = (self.sparta[int(self.station)].index.get_loc(day))-1
+               # print 'loc_prec:', loc_prec, 'type: ', type(loc_prec)
+                stats.loc[stats.firsthour[i], 'Tmax_a'] = self.sparta[int(self.station)][loc_prec]
+                ''' # add ZAMG Tmax of the onset day and the day prior to onset day
+                stats.loc[stats.firstday[i], 'Tmax_b'] = self.ZAMG_tag[station].loc[stats.firstday[i]]
+                print 'stats.firstday[i]: ', stats.firstday[i]
+                #get location of Tmax preceding the onset day
+                loc_prec = (self.ZAMG_tag[station].index.get_loc(stats.firstday[i]))-1
+                stats.loc[stats.firstday[i], 'Tmax_a'] = self.ZAMG_tag[station][loc_prec]'''   
    
-    df = self.dataframe
-    # return index of the maximum values for each station
-    # station record
-    max_dates_stations = dataframe.idxmax()       
-        # gives for each date the station that had the highest value for the day
-data.idxmax(axis=1)
-
-# for each station the date where the station had its max
-data.idxmax(axis=0) 
-
-    # Values of max intensities per station
-    pd_dates = pd.to_datetime(max_dates_stations.values)
-
+                #------------------------------------------------------------------
+        del stats['firsthour']
+        return stats
     
-    # days at which more than one station had its maximum
-    # normalize index for min and h data?
-    dup_dates = dates[dates.duplicated()]
-    # which dates occur how often?
-    dates.value_counts()
-
-
-
-# dates over 99th percentile
-
-  
-    
-dataframe.describe()
-# how many valid records per station:
-dataframe.count(0)
-# how many valid records per date
-dataframe.count(1)
-
-
-
-   '''
+#    def RSS(Dayframe):
+#        ''' 
+#        METHOD:
+#        * calculate ranked skill score of events in IndicatorFrame
+#        * rank each event based on indicators I(1)-I(n)
+#        * RSS(E) = sum of all ranks
+#        -----------------------------------------------------------------------
+#        INPUT:
+#        * Dataframe of event statistics (hourly or daily?)
+#        -----------------------------------------------------------------------
+#        OUTPUT:
+#        * table of individual ranks
+#        * list of RSS
+#        -----------------------------------------------------------------------
+#        '''
+#        
+#        ''' Each indicator of each station is ranked from 1-N (stationwise)
+#        for more than one value of the same size, they get the same rank, but the
+#        following gets the rank according to its position, not value. So if two
+#        max values are the same, the second highest value is the third highest
+#        observation and ranked '3'.
+#        '''
+#        rankdict = {}
+#        # ranks from high to low (highest gets '1', lowest 'N')
+#        rank_cols_hi = ['max daily', 'peak 1', 'peak 2', 'mean rain rate',
+#                        'max h 1']
+#        # ranks from low to high (lowest gets '1', highest 'N')
+#        rank_cols_lo = ['duration', 'perc nan']
+#                     
+#        for col in rank_cols_hi:         
+#            ranks = Dayframe.xs(col, level=1, axis=1).rank(method='min',
+#                                                            na_option='keep',
+#                                                            ascending=0)
+#            rankdict.update({col: ranks})   
+#                                                 
+#        for col in rank_cols_lo:        
+#            ranks = Dayframe.xs(col, level=1, axis=1).rank(method='min',
+#                                                            na_option='keep',
+#                                                            ascending=1)        
+#            rankdict.update({col: ranks})   
+#            rankframe = pd.concat(rankdict, axis=1)
+#        
+#        
+#        ''' Ranked Skill Score Dataframe:
+#        '''
+#        RSS_dict = {}
+#        norm = len(rankframe.columns.get_level_values(0).drop_duplicates())
+#        for station in Dayframe.columns.get_level_values(0).drop_duplicates():
+#            RSS = (rankframe.xs(station, level=1, axis=1).sum(axis=1)/norm).rank(method='min',
+#                                                                        na_option='keep',
+#                                                                        ascending=1)
+#            RSS_dict.update({station: RSS})
+#            RSS_frame = pd.concat(RSS_dict, axis=1)
+#       
+#        return RSS_frame    
+#         
+#            
+#    def flagging(self):
+#        ''' 
+#        METHOD:
+#        flag potential errors and threshold events?
+#        -----------------------------------------------------------------------
+#        INPUT:
+#        -----------------------------------------------------------------------
+#        OUTPUT:
+#        -----------------------------------------------------------------------
+#        '''
+#        
+#            
+#            
+#        '''
+#        does the peak intensity time vary from year to year?
+#       
+#        df = self.dataframe
+#        # return index of the maximum values for each station
+#        # station record
+#        max_dates_stations = dataframe.idxmax()       
+#            # gives for each date the station that had the highest value for the day
+#    data.idxmax(axis=1)
+#    
+#    # for each station the date where the station had its max
+#    data.idxmax(axis=0) 
+#    
+#        # Values of max intensities per station
+#        pd_dates = pd.to_datetime(max_dates_stations.values)
+#    
+#        
+#        # days at which more than one station had its maximum
+#        # normalize index for min and h data?
+#        dup_dates = dates[dates.duplicated()]
+#        # which dates occur how often?
+#        dates.value_counts()
+#
+#
+#
+## dates over 99th percentile
+#
+#  
+#    
+#dataframe.describe()
+## how many valid records per station:
+#dataframe.count(0)
+## how many valid records per date
+#dataframe.count(1)
+#
+#
+#
+#   '''
